@@ -261,6 +261,10 @@ function render(){
   const maxW=W-M*2;
   const blocks=[];   // {text,size,weight,color,lh,spacing,right}
 
+  const isRes = team==="Reserves";
+  const usLong  = isRes ? "TUNLEY RESERVES" : "TUNLEY ATHLETIC";
+  const usShort = isRes ? "TUNLEY RESERVES" : "TUNLEY";
+
   const kick = state==="matchday"?"MATCHDAY":state==="half"?"HALF TIME"
              : state==="motm"?"MAN OF THE MATCH":"FULL TIME";
   blocks.push({text:kick,size:30,weight:600,color:state==="half"?AMBER:GREEN,lh:30,spacing:"12.6px",gapAfter:30});
@@ -269,7 +273,7 @@ function render(){
     const name=(document.getElementById('player').value||"Player name").trim();
     wrap(name.toUpperCase(),112,700,maxW).forEach(l=>blocks.push({text:l,size:112,weight:700,color:"#fff",lh:103}));
   }else if(state==="matchday"){
-    wrap("TUNLEY ATHLETIC",112,700,maxW).forEach(l=>blocks.push({text:l,size:112,weight:700,color:"#fff",lh:103}));
+    wrap(usLong,112,700,maxW).forEach(l=>blocks.push({text:l,size:112,weight:700,color:"#fff",lh:103}));
     blocks.push({text:"v",size:44,weight:400,color:"rgba(255,255,255,.62)",lh:44,gapBefore:12,gapAfter:10});
     wrap(opp.toUpperCase(),112,700,maxW).forEach(l=>blocks.push({text:l,size:112,weight:700,color:"#fff",lh:103}));
   }else{
@@ -278,7 +282,7 @@ function render(){
     const tn=parseInt(ts)||0, on=parseInt(os)||0;
     const dimT = state==="full" && tn<on;
     const dimO = state==="full" && on<tn;
-    blocks.push({text:"TUNLEY",size:104,weight:700,color:dimT?"rgba(255,255,255,.55)":"#fff",lh:104,right:ts});
+    blocks.push({text:usShort,size:104,weight:700,color:dimT?"rgba(255,255,255,.55)":"#fff",lh:104,right:ts});
     blocks.push({text:opp.toUpperCase(),size:104,weight:700,color:dimO?"rgba(255,255,255,.55)":"#fff",lh:104,right:os,gapBefore:6,shrink:true});
   }
 
