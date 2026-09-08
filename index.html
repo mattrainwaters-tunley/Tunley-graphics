@@ -28,9 +28,9 @@
   }
   select:focus,input:focus{outline:2px solid #4CAF72;outline-offset:1px;border-color:transparent}
 
-  .states{display:flex;gap:7px;margin-top:4px}
+  .states{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:4px}
   .states button{
-    flex:1;background:#1e2229;border:1px solid #333a44;color:#aeb7c1;
+    background:#1e2229;border:1px solid #333a44;color:#aeb7c1;
     border-radius:7px;padding:9px 4px;font-size:14px;letter-spacing:.1em;
     text-transform:uppercase;cursor:pointer;font-family:inherit;
   }
@@ -66,6 +66,19 @@
     border-radius:5px;box-shadow:0 12px 40px rgba(0,0,0,.55);
     background:#0c1a12;
   }
+
+  /* ---- phones ---- */
+  @media (max-width:900px){
+    body{flex-direction:column;padding:12px;gap:12px}
+    .stage{order:1;width:100%;position:sticky;top:0;z-index:5;
+           background:#14161a;padding:8px 0 10px}
+    canvas{width:auto;max-width:100%;height:40vh;max-height:40vh}
+    .panel{order:2;width:100%}
+    h1{font-size:22px}
+    .sub{margin-bottom:14px}
+    select,input[type=text]{font-size:16px;padding:12px}
+    .dl{padding:17px;font-size:20px}
+  }
 </style>
 </head>
 <body>
@@ -82,6 +95,7 @@
     <button data-state="matchday" aria-pressed="true">Matchday</button>
     <button data-state="half" aria-pressed="false">Half time</button>
     <button data-state="full" aria-pressed="false">Full time</button>
+    <button data-state="motm" aria-pressed="false">Man of the match</button>
   </div>
 
   <div id="scoreArea" style="display:none">
@@ -94,6 +108,13 @@
       <label>Scorers <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
       <input type="text" id="scorers" placeholder="Ben Curtis 22', George Rowe 61'">
     </div>
+  </div>
+
+  <div id="motmArea" style="display:none">
+    <label>Player</label>
+    <input type="text" id="player" placeholder="Ben Curtis">
+    <label>What they did <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+    <input type="text" id="note" placeholder="Two goals and never stopped running">
   </div>
 
   <label>Photo</label>
@@ -109,8 +130,9 @@
   </div>
 
   <button class="dl" id="dl">Save image</button>
-  <div class="hint">Saves a 1080&times;1350 PNG, ready for Instagram.
-  Works without the photo too &mdash; you just get the plain green background.</div>
+  <div class="hint">On a phone this opens the share sheet &mdash; tap
+  <b>Save Image</b> to put it in your camera roll, or send it straight to
+  Instagram. On a computer it downloads a 1080&times;1350 PNG.</div>
 </div>
 
 <div class="stage">
@@ -239,10 +261,14 @@ function render(){
   const maxW=W-M*2;
   const blocks=[];   // {text,size,weight,color,lh,spacing,right}
 
-  const kick = state==="matchday"?"MATCHDAY":state==="half"?"HALF TIME":"FULL TIME";
+  const kick = state==="matchday"?"MATCHDAY":state==="half"?"HALF TIME"
+             : state==="motm"?"MAN OF THE MATCH":"FULL TIME";
   blocks.push({text:kick,size:30,weight:600,color:state==="half"?AMBER:GREEN,lh:30,spacing:"12.6px",gapAfter:30});
 
-  if(state==="matchday"){
+  if(state==="motm"){
+    const name=(document.getElementById('player').value||"Player name").trim();
+    wrap(name.toUpperCase(),112,700,maxW).forEach(l=>blocks.push({text:l,size:112,weight:700,color:"#fff",lh:103}));
+  }else if(state==="matchday"){
     wrap("TUNLEY ATHLETIC",112,700,maxW).forEach(l=>blocks.push({text:l,size:112,weight:700,color:"#fff",lh:103}));
     blocks.push({text:"v",size:44,weight:400,color:"rgba(255,255,255,.62)",lh:44,gapBefore:12,gapAfter:10});
     wrap(opp.toUpperCase(),112,700,maxW).forEach(l=>blocks.push({text:l,size:112,weight:700,color:"#fff",lh:103}));
@@ -260,8 +286,15 @@ function render(){
 
   const meta = state==="matchday"
     ? [niceDate(iso),"·",time,"·",venue.toUpperCase()]
+    : state==="motm"
+    ? ["v "+opp.toUpperCase(),"·",niceDate(iso)]
     : [niceDate(iso),"·",venue.toUpperCase()];
   blocks.push({meta:meta,size:34,weight:500,lh:34,spacing:"3.7px"});
+
+  if(state==="motm"){
+    const n=document.getElementById('note').value.trim();
+    if(n) wrap(n,32,400,maxW).forEach((l,i)=>blocks.push({text:l,size:32,weight:400,color:"rgba(255,255,255,.62)",lh:40,gapBefore:i===0?16:0,spacing:"1.6px"}));
+  }
 
   if(state==="full"){
     const sc=document.getElementById('scorers').value.trim();
@@ -319,14 +352,15 @@ document.querySelectorAll('.states button').forEach(btn=>{
   btn.onclick=()=>{
     state=btn.dataset.state;
     document.querySelectorAll('.states button').forEach(b=>b.setAttribute('aria-pressed',b===btn));
-    document.getElementById('scoreArea').style.display = state==="matchday"?"none":"block";
+    document.getElementById('scoreArea').style.display = (state==="half"||state==="full")?"block":"none";
     document.getElementById('scorerWrap').style.display = state==="full"?"block":"none";
+    document.getElementById('motmArea').style.display = state==="motm"?"block":"none";
     render();
   };
 });
 
 sel.onchange=render;
-['ts','os','scorers'].forEach(id=>document.getElementById(id).oninput=render);
+['ts','os','scorers','player','note'].forEach(id=>document.getElementById(id).oninput=render);
 
 const drop=document.getElementById('drop'), file=document.getElementById('file');
 drop.onclick=()=>file.click();
@@ -352,8 +386,23 @@ document.getElementById('nudge').oninput=e=>{nudge=e.target.value/100;render()};
 document.getElementById('dl').onclick=()=>{
   const f=FIXTURES[sel.value];
   const name="tunley-"+f[1]+"-"+state+".png";
-  const a=document.createElement('a');
-  a.download=name; a.href=cv.toDataURL('image/png'); a.click();
+  cv.toBlob(async blob=>{
+    if(!blob) return;
+    const file=new File([blob],name,{type:'image/png'});
+
+    // Phones: open the share sheet so you can tap Save Image or send
+    // it straight to Instagram. This is the path that actually works on iPhone.
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try{ await navigator.share({files:[file]}); return; }
+      catch(err){ if(err && err.name==='AbortError') return; }
+    }
+
+    // Desktop: normal download
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.download=name; a.href=url; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+  },'image/png');
 };
 
 if(document.fonts && document.fonts.ready) document.fonts.ready.then(render);
