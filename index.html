@@ -422,11 +422,17 @@ function renderSquad(){
   let tSize=60, tLines=wrap(title,tSize,700,tW);
   while(tLines.length>2 && tSize>34){ tSize-=2; tLines=wrap(title,tSize,700,tW); }
   const tLH=Math.round(tSize*0.94);
-  let ty = bY + (bW - tLines.length*tLH)/2 + 4;
+  const sSize=Math.round(tSize*0.62), sGap=Math.round(tSize*0.22), sLH=Math.round(sSize*0.94);
+  const stackH=tLines.length*tLH + sGap + sLH;
+  let ty = Math.max(bY, bY + (bW - stackH)/2 + 4);
   ctx.fillStyle="#fff"; ls("1.4px");
   ctx.font="700 "+tSize+"px 'Barlow Condensed',sans-serif";
   tLines.forEach((l,i)=>ctx.fillText(l,tx,ty+i*tLH));
+  ctx.font="600 "+sSize+"px 'Barlow Condensed',sans-serif";
+  ctx.fillStyle=GREEN; ls("7px");
+  ctx.fillText("SQUAD", tx, ty + tLines.length*tLH + sGap);
   ls("0px");
+  const headerBottom = Math.max(bY+bW, ty+stackH);
 
   /* bottom line: opponent, date, kick off */
   const metaSize=34, metaLH=34;
@@ -449,7 +455,7 @@ function renderSquad(){
   /* the names, one column down the left */
   const names = squadNames().length ? squadNames()
               : ["Add the squad","one name per line"];
-  const listTop = bY+bW+70;
+  const listTop = headerBottom+62;
   const listBottom = ruleY-44;
   const avail = listBottom-listTop;
   const colW = 630;
