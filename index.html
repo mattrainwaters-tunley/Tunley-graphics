@@ -99,7 +99,8 @@
     <button data-state="half" aria-pressed="false">Half time</button>
     <button data-state="full" aria-pressed="false">Full time</button>
     <button data-state="motm" aria-pressed="false">Man of the match</button>
-    <button data-state="xi" aria-pressed="false" class="wide">Squad</button>
+    <button data-state="xi" aria-pressed="false">Squad</button>
+    <button data-state="off" aria-pressed="false">Match off</button>
   </div>
 
   <div id="scoreArea" style="display:none">
@@ -112,6 +113,11 @@
       <label>Scorers <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
       <input type="text" id="scorers" placeholder="Ben Curtis 22', George Rowe 61'">
     </div>
+  </div>
+
+  <div id="offArea" style="display:none">
+    <label>Reason <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+    <input type="text" id="offnote" placeholder="Pitch waterlogged">
   </div>
 
   <div id="motmArea" style="display:none">
@@ -241,7 +247,7 @@ loadSquad();
 /* ---- canvas drawing ---- */
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
 const W=1080,H=1350,M=64;
-const GREEN="#4CAF72", AMBER="#E8B84B";
+const GREEN="#4CAF72", AMBER="#E8B84B", RED="#E03A3A";
 
 function ls(v){ try{ctx.letterSpacing=v;}catch(e){} }
 
@@ -282,6 +288,33 @@ function drawScrim(){
   ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
 }
 
+function drawOffBand(safeTop,safeBottom){
+  const band="MATCH OFF", ang=-14*Math.PI/180;
+  const room=Math.max(120,safeBottom-safeTop), cy=(safeTop+safeBottom)/2;
+  let target=1080, fs=0, half=0;
+  for(let k=0;k<30;k++){
+    ctx.font="700 150px 'Barlow Condensed',sans-serif";
+    ls("6px");
+    fs=Math.round(150*target/ctx.measureText(band).width);
+    half=(target/2)*Math.abs(Math.sin(ang)) + (fs*0.40)*Math.cos(ang);
+    // keep the whole word inside the frame, corners included
+    const across=target*Math.cos(ang) + (fs*0.80)*Math.abs(Math.sin(ang));
+    if(half<=room/2 && across<=W-34) break;
+    target-=30;
+  }
+  ctx.font="700 "+fs+"px 'Barlow Condensed',sans-serif";
+  ctx.save();
+  ctx.translate(W/2,cy);
+  ctx.rotate(ang);
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.shadowColor="rgba(0,0,0,.5)"; ctx.shadowBlur=32; ctx.shadowOffsetY=6;
+  ctx.fillStyle=RED;
+  ctx.fillText(band,0,0);
+  ctx.restore();
+  ctx.shadowColor="transparent"; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+  ls("0px"); ctx.textAlign="left"; ctx.textBaseline="top";
+}
+
 function render(){
   if(state==="xi"){ renderSquad(); return; }
   const f=FIXTURES[sel.value];
@@ -291,7 +324,6 @@ function render(){
   drawScrim();
 
   if(badge.complete && badge.naturalWidth) ctx.drawImage(badge,M,56,185,185);
-
   const maxW=W-M*2;
   const blocks=[];   // {text,size,weight,color,lh,spacing,right}
 
@@ -300,13 +332,15 @@ function render(){
   const usShort = isRes ? "TUNLEY RESERVES" : "TUNLEY";
 
   const kick = state==="matchday"?"MATCHDAY":state==="half"?"HALF TIME"
-             : state==="motm"?"MAN OF THE MATCH":"FULL TIME";
-  blocks.push({text:kick,size:30,weight:600,color:state==="half"?AMBER:GREEN,lh:30,spacing:"12.6px",gapAfter:30});
+             : state==="motm"?"MAN OF THE MATCH"
+             : state==="off"?"MATCH OFF":"FULL TIME";
+  if(state!=="off")
+    blocks.push({text:kick,size:30,weight:600,color:state==="half"?AMBER:GREEN,lh:30,spacing:"12.6px",gapAfter:30});
 
   if(state==="motm"){
     const name=(document.getElementById('player').value||"Player name").trim();
     wrap(name.toUpperCase(),112,700,maxW).forEach(l=>blocks.push({text:l,size:112,weight:700,color:"#fff",lh:103}));
-  }else if(state==="matchday"){
+  }else if(state==="matchday"||state==="off"){
     wrap(usLong,112,700,maxW).forEach(l=>blocks.push({text:l,size:112,weight:700,color:"#fff",lh:103}));
     blocks.push({text:"v",size:44,weight:400,color:"rgba(255,255,255,.62)",lh:44,gapBefore:12,gapAfter:10});
     wrap(opp.toUpperCase(),112,700,maxW).forEach(l=>blocks.push({text:l,size:112,weight:700,color:"#fff",lh:103}));
@@ -322,7 +356,7 @@ function render(){
 
   blocks.push({rule:true,gapBefore:38,gapAfter:26});
 
-  const meta = state==="matchday"
+  const meta = (state==="matchday"||state==="off")
     ? [niceDate(iso),"·",time,"·",venue.toUpperCase()]
     : state==="motm"
     ? ["v "+opp.toUpperCase(),"·",niceDate(iso)]
@@ -332,6 +366,11 @@ function render(){
   if(state==="motm"){
     const n=document.getElementById('note').value.trim();
     if(n) wrap(n,32,400,maxW).forEach((l,i)=>blocks.push({text:l,size:32,weight:400,color:"rgba(255,255,255,.62)",lh:40,gapBefore:i===0?16:0,spacing:"1.6px"}));
+  }
+
+  if(state==="off"){
+    const r=document.getElementById('offnote').value.trim();
+    if(r) wrap(r,32,400,maxW).forEach((l,i)=>blocks.push({text:l,size:32,weight:400,color:"rgba(255,255,255,.62)",lh:40,gapBefore:i===0?16:0,spacing:"1.6px"}));
   }
 
   if(state==="full"){
@@ -344,6 +383,8 @@ function render(){
   blocks.forEach(b=>{ total += (b.gapBefore||0) + (b.rule?2:b.lh) + (b.gapAfter||0); });
   let y = H - M - total;
 
+  if(state==="off") drawOffBand(250, y-30);
+
   ctx.textBaseline="top";
   for(const b of blocks){
     y += (b.gapBefore||0);
@@ -355,13 +396,20 @@ function render(){
     }
     ls(b.spacing||"0px");
     if(b.meta){
-      ctx.font=b.weight+" "+b.size+"px 'Barlow Condensed',sans-serif";
+      // shrink the line so a long venue name never runs off the edge
+      let msize=b.size, gap=26;
+      const widthAt=(sz,g)=>{
+        ctx.font=b.weight+" "+sz+"px 'Barlow Condensed',sans-serif";
+        return b.meta.reduce((t,part)=>t+ctx.measureText(part).width+g,0)-g;
+      };
+      while(widthAt(msize,gap)>maxW && msize>20){ msize-=1; gap=Math.max(14,gap-1); }
+      ctx.font=b.weight+" "+msize+"px 'Barlow Condensed',sans-serif";
       let x=M;
       b.meta.forEach((part,i)=>{
         ctx.fillStyle = part==="·" ? "rgba(255,255,255,.42)"
                       : (i===b.meta.length-1 ? "rgba(255,255,255,.62)" : "#fff");
         ctx.fillText(part,x,y);
-        x += ctx.measureText(part).width + 26;
+        x += ctx.measureText(part).width + gap;
       });
     } else {
       let size=b.size;
@@ -497,6 +545,7 @@ document.querySelectorAll('.states button').forEach(btn=>{
     document.getElementById('scoreArea').style.display = (state==="half"||state==="full")?"block":"none";
     document.getElementById('scorerWrap').style.display = state==="full"?"block":"none";
     document.getElementById('motmArea').style.display = state==="motm"?"block":"none";
+    document.getElementById('offArea').style.display = state==="off"?"block":"none";
     document.getElementById('xiArea').style.display = state==="xi"?"block":"none";
     render();
   };
@@ -508,7 +557,7 @@ sel.onchange=()=>{
   render();
 };
 squadBox.oninput=()=>{ saveSquad(); render(); };
-['ts','os','scorers','player','note'].forEach(id=>document.getElementById(id).oninput=render);
+['ts','os','scorers','player','note','offnote'].forEach(id=>document.getElementById(id).oninput=render);
 
 const drop=document.getElementById('drop'), file=document.getElementById('file');
 drop.onclick=()=>file.click();
