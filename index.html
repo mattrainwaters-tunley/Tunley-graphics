@@ -140,6 +140,10 @@ George Rowe"></textarea>
   <div id="nudgeWrap" style="display:none">
     <label>Move photo up / down</label>
     <input type="range" class="slider" id="nudge" min="0" max="100" value="50">
+    <label>Move photo left / right</label>
+    <input type="range" class="slider" id="nudgeX" min="0" max="100" value="50">
+    <label>Zoom</label>
+    <input type="range" class="slider" id="zoom" min="100" max="300" value="100">
   </div>
 
   <button class="dl" id="dl">Save image</button>
@@ -207,7 +211,7 @@ function niceDate(iso){
 }
 
 /* ---- state ---- */
-let state="matchday", photo=null, nudge=0.5, badge=new Image();
+let state="matchday", photo=null, nudge=0.5, nudgeX=0.5, zoom=1, badge=new Image();
 badge.src=BADGE_SRC;
 
 const sel=document.getElementById('fixture');
@@ -260,10 +264,10 @@ function drawPhoto(){
     ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
     return;
   }
-  // cover-fit, auto-cropped, nudged vertically
-  const s=Math.max(W/photo.width,H/photo.height);
+  // cover-fit, auto-cropped, then zoomed and nudged around
+  const s=Math.max(W/photo.width,H/photo.height)*zoom;
   const w=photo.width*s, h=photo.height*s;
-  const x=(W-w)/2, y=(H-h)*nudge;
+  const x=(W-w)*nudgeX, y=(H-h)*nudge;
   ctx.drawImage(photo,x,y,w,h);
 }
 
@@ -518,6 +522,10 @@ function load(f){
   const img=new Image();
   img.onload=()=>{
     photo=img;
+    nudge=0.5; nudgeX=0.5; zoom=1;
+    document.getElementById('nudge').value=50;
+    document.getElementById('nudgeX').value=50;
+    document.getElementById('zoom').value=100;
     drop.innerHTML="<b>Photo loaded</b>click to swap it";
     document.getElementById('nudgeWrap').style.display="block";
     render();
@@ -525,7 +533,9 @@ function load(f){
   img.src=URL.createObjectURL(f);
 }
 
-document.getElementById('nudge').oninput=e=>{nudge=e.target.value/100;render()};
+document.getElementById('nudge').oninput =e=>{nudge =e.target.value/100;render()};
+document.getElementById('nudgeX').oninput=e=>{nudgeX=e.target.value/100;render()};
+document.getElementById('zoom').oninput  =e=>{zoom  =e.target.value/100;render()};
 
 document.getElementById('dl').onclick=()=>{
   const f=FIXTURES[sel.value];
