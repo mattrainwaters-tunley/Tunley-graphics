@@ -21,12 +21,13 @@
   .panel{width:380px;flex:none}
   label{display:block;font-size:14px;letter-spacing:.14em;text-transform:uppercase;
         color:#7f8a95;margin:16px 0 6px}
-  select,input[type=text]{
+  select,input[type=text],textarea{
     width:100%;background:#1e2229;border:1px solid #333a44;color:#e6eaef;
     border-radius:7px;padding:10px 11px;font-size:17px;
     font-family:'Barlow Condensed',sans-serif;
   }
-  select:focus,input:focus{outline:2px solid #4CAF72;outline-offset:1px;border-color:transparent}
+  textarea{min-height:190px;line-height:1.45;resize:vertical}
+  select:focus,input:focus,textarea:focus{outline:2px solid #4CAF72;outline-offset:1px;border-color:transparent}
 
   .states{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:4px}
   .states button{
@@ -34,6 +35,7 @@
     border-radius:7px;padding:9px 4px;font-size:14px;letter-spacing:.1em;
     text-transform:uppercase;cursor:pointer;font-family:inherit;
   }
+  .states button.wide{grid-column:1/-1}
   .states button[aria-pressed="true"]{background:#4CAF72;border-color:#4CAF72;color:#06210f;font-weight:600}
 
   .drop{
@@ -76,7 +78,8 @@
     .panel{order:2;width:100%}
     h1{font-size:22px}
     .sub{margin-bottom:14px}
-    select,input[type=text]{font-size:16px;padding:12px}
+    select,input[type=text],textarea{font-size:16px;padding:12px}
+    textarea{min-height:150px}
     .dl{padding:17px;font-size:20px}
   }
 </style>
@@ -96,6 +99,7 @@
     <button data-state="half" aria-pressed="false">Half time</button>
     <button data-state="full" aria-pressed="false">Full time</button>
     <button data-state="motm" aria-pressed="false">Man of the match</button>
+    <button data-state="xi" aria-pressed="false" class="wide">Squad</button>
   </div>
 
   <div id="scoreArea" style="display:none">
@@ -115,6 +119,15 @@
     <input type="text" id="player" placeholder="Ben Curtis">
     <label>What they did <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
     <input type="text" id="note" placeholder="Two goals and never stopped running">
+  </div>
+
+  <div id="xiArea" style="display:none">
+    <label>Squad <span style="text-transform:none;letter-spacing:0">(one name per line)</span></label>
+    <textarea id="squad" placeholder="Charlie Peters
+Will Emery
+Ben Curtis
+George Rowe"></textarea>
+    <div class="hint" style="margin-top:8px">Saved per team, so next week it is already here.</div>
   </div>
 
   <label>Photo</label>
@@ -205,6 +218,22 @@ FIXTURES.forEach((f,i)=>{
   sel.appendChild(o);
 });
 
+/* ---- squad list, remembered per team ---- */
+const squadBox=document.getElementById('squad');
+function teamOf(){ return FIXTURES[sel.value][0]; }
+function squadKey(t){ return "tunley-squad-"+t; }
+function squadNames(){
+  return squadBox.value.split(/[\n,]/).map(n=>n.trim()).filter(Boolean).slice(0,22);
+}
+function loadSquad(){
+  try{ squadBox.value = localStorage.getItem(squadKey(teamOf())) || ""; }catch(e){}
+}
+function saveSquad(){
+  try{ localStorage.setItem(squadKey(teamOf()), squadBox.value); }catch(e){}
+}
+let lastTeam=teamOf();
+loadSquad();
+
 /* ---- canvas drawing ---- */
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
 const W=1080,H=1350,M=64;
@@ -250,6 +279,7 @@ function drawScrim(){
 }
 
 function render(){
+  if(state==="xi"){ renderSquad(); return; }
   const f=FIXTURES[sel.value];
   const [team,iso,time,opp,ha,venue]=f;
   ctx.clearRect(0,0,W,H);
@@ -351,6 +381,104 @@ function render(){
   }
 }
 
+/* ---- squad graphic: badge and team name top left, names down the left,
+       opponent / date / kick off along the bottom ---- */
+function drawSquadScrim(){
+  if(photo){
+    const g=ctx.createLinearGradient(0,0,W,0);
+    g.addColorStop(0,   "rgba(5,18,12,.90)");
+    g.addColorStop(.50, "rgba(5,18,12,.66)");
+    g.addColorStop(1,   "rgba(5,18,12,.10)");
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    const v=ctx.createLinearGradient(0,0,0,H);
+    v.addColorStop(0,  "rgba(0,0,0,.34)");
+    v.addColorStop(.30,"rgba(0,0,0,0)");
+    v.addColorStop(.82,"rgba(0,0,0,.22)");
+    v.addColorStop(1,  "rgba(0,0,0,.62)");
+    ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
+  }else{
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,"rgba(0,0,0,.16)");
+    g.addColorStop(1,"rgba(0,0,0,.40)");
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  }
+}
+
+function renderSquad(){
+  const f=FIXTURES[sel.value];
+  const [team,iso,time,opp,ha,venue]=f;
+  const maxW=W-M*2;
+
+  ctx.clearRect(0,0,W,H);
+  drawPhoto();
+  drawSquadScrim();
+  ctx.textBaseline="top";
+
+  /* badge + team name */
+  const bW=150, bY=58;
+  if(badge.complete && badge.naturalWidth) ctx.drawImage(badge,M,bY,bW,bW);
+  const title = team==="Reserves" ? "TUNLEY ATHLETIC RESERVES" : "TUNLEY ATHLETIC FIRSTS";
+  const tx = M+bW+30, tW = W-M-tx;
+  let tSize=60, tLines=wrap(title,tSize,700,tW);
+  while(tLines.length>2 && tSize>34){ tSize-=2; tLines=wrap(title,tSize,700,tW); }
+  const tLH=Math.round(tSize*0.94);
+  let ty = bY + (bW - tLines.length*tLH)/2 + 4;
+  ctx.fillStyle="#fff"; ls("1.4px");
+  ctx.font="700 "+tSize+"px 'Barlow Condensed',sans-serif";
+  tLines.forEach((l,i)=>ctx.fillText(l,tx,ty+i*tLH));
+  ls("0px");
+
+  /* bottom line: opponent, date, kick off */
+  const metaSize=34, metaLH=34;
+  const metaY = H-M-metaLH;
+  const ruleY = metaY-28;
+  ctx.fillStyle="rgba(255,255,255,.26)";
+  ctx.fillRect(M,ruleY,maxW,2);
+  const meta=["v "+opp.toUpperCase(),"·",niceDate(iso),"·",time];
+  ls("3.7px");
+  ctx.font="500 "+metaSize+"px 'Barlow Condensed',sans-serif";
+  let mx=M;
+  meta.forEach((part,i)=>{
+    ctx.fillStyle = part==="·" ? "rgba(255,255,255,.42)"
+                  : (i===meta.length-1 ? "rgba(255,255,255,.62)" : "#fff");
+    ctx.fillText(part,mx,metaY);
+    mx += ctx.measureText(part).width + 26;
+  });
+  ls("0px");
+
+  /* the names, one column down the left */
+  const names = squadNames().length ? squadNames()
+              : ["Add the squad","one name per line"];
+  const listTop = bY+bW+70;
+  const listBottom = ruleY-44;
+  const avail = listBottom-listTop;
+  const colW = 630;
+  let size=54;
+  const rowOf=v=>Math.max(Math.round(v*1.36), v+16);
+  while(size>20){
+    ctx.font="600 "+size+"px 'Barlow Condensed',sans-serif";
+    const widest=Math.max.apply(null,names.map(n=>ctx.measureText(n.toUpperCase()).width));
+    if(names.length*rowOf(size)<=avail && widest<=colW-12) break;
+    size-=2;
+  }
+  const rowH=rowOf(size);
+  ctx.font="600 "+size+"px 'Barlow Condensed',sans-serif";
+  ls("0.8px");
+  names.forEach((n,i)=>{
+    const y=listTop+i*rowH;
+    const t=n.toUpperCase();
+    ctx.fillStyle="#fff";
+    ctx.fillText(t,M,y);
+    // hairline under the name only, stopping where the name stops
+    const m=ctx.measureText(t);
+    const drop=(m.actualBoundingBoxDescent||size*0.78)+Math.max(10,Math.round(size*0.26));
+    ctx.fillStyle="rgba(255,255,255,.20)";
+    const bleed=Math.max(12,Math.round(size*0.40));
+    ctx.fillRect(M, y+drop, m.width+bleed, Math.max(1,Math.round(size/34)));
+  });
+  ls("0px");
+}
+
 /* ---- wiring ---- */
 document.querySelectorAll('.states button').forEach(btn=>{
   btn.onclick=()=>{
@@ -359,11 +487,17 @@ document.querySelectorAll('.states button').forEach(btn=>{
     document.getElementById('scoreArea').style.display = (state==="half"||state==="full")?"block":"none";
     document.getElementById('scorerWrap').style.display = state==="full"?"block":"none";
     document.getElementById('motmArea').style.display = state==="motm"?"block":"none";
+    document.getElementById('xiArea').style.display = state==="xi"?"block":"none";
     render();
   };
 });
 
-sel.onchange=render;
+sel.onchange=()=>{
+  const t=teamOf();
+  if(t!==lastTeam){ lastTeam=t; loadSquad(); }
+  render();
+};
+squadBox.oninput=()=>{ saveSquad(); render(); };
 ['ts','os','scorers','player','note'].forEach(id=>document.getElementById(id).oninput=render);
 
 const drop=document.getElementById('drop'), file=document.getElementById('file');
@@ -389,7 +523,7 @@ document.getElementById('nudge').oninput=e=>{nudge=e.target.value/100;render()};
 
 document.getElementById('dl').onclick=()=>{
   const f=FIXTURES[sel.value];
-  const name="tunley-"+f[1]+"-"+state+".png";
+  const name="tunley-"+f[1]+"-"+(state==="xi"?"squad":state)+".png";
   cv.toBlob(async blob=>{
     if(!blob) return;
     const file=new File([blob],name,{type:'image/png'});
