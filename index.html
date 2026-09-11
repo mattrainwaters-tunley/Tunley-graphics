@@ -374,14 +374,17 @@ function drawVignette(){
   ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
 }
 
-function drawScrim(){
+function drawScrim(textTop){
+  // the wash is a band under the text, not a haze over the whole photo.
+  // it starts a little above the first line and deepens toward the bottom.
+  const tt = (textTop===undefined?H*0.62:textTop);
+  const t0 = Math.max(0, Math.min(1,(tt-140)/H));   // clear above here
+  const t1 = Math.max(t0+0.01, Math.min(1,(tt+20)/H)); // up to strength by here
   const g=ctx.createLinearGradient(0,0,0,H);
-  const heavy = state!=="matchday";
-  g.addColorStop(0,   `rgba(0,0,0,${sc(heavy?.36:.30)})`);
-  g.addColorStop(.25, `rgba(0,0,0,${sc(heavy?.06:0)})`);
-  g.addColorStop(.40, `rgba(0,0,0,${sc(heavy?.10:0)})`);
-  g.addColorStop(.76, `rgba(0,0,0,${sc(heavy?.80:.72)})`);
-  g.addColorStop(1,   `rgba(0,0,0,${sc(heavy?.92:.88)})`);
+  g.addColorStop(0,  "rgba(0,0,0,0)");
+  g.addColorStop(t0, "rgba(0,0,0,0)");
+  g.addColorStop(t1, `rgba(0,0,0,${sc(.74)})`);
+  g.addColorStop(1,  `rgba(0,0,0,${sc(.92)})`);
   ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
   drawVignette();
 }
@@ -418,11 +421,6 @@ function render(){
   if(state==="mdsquad"){ renderMatchdaySquad(); return; }
   const f=FIXTURES[sel.value];
   const [team,iso,time,opp,ha,venue]=f;
-  ctx.clearRect(0,0,W,H);
-  drawPhoto();
-  drawScrim();
-
-  if(badge.complete && badge.naturalWidth) ctx.drawImage(badge,M,56,185,185);
   const maxW=W-M*2;
   const blocks=[];   // {text,size,weight,color,lh,spacing,right}
 
@@ -481,6 +479,12 @@ function render(){
   blocks.forEach(b=>{ total += (b.gapBefore||0) + (b.rule?2:b.lh) + (b.gapAfter||0); });
   let y = H - M - total;
 
+  // background first, with the wash hugging the block of text
+  ctx.clearRect(0,0,W,H);
+  drawPhoto();
+  drawScrim(y);
+  if(badge.complete && badge.naturalWidth) ctx.drawImage(badge,M,56,185,185);
+
   if(state==="off") drawOffBand(250, y-30);
 
   ctx.textBaseline="top";
@@ -537,9 +541,10 @@ function drawSquadScrim(){
   if(photo){
     if(shade>0){
       const g=ctx.createLinearGradient(0,0,W,0);
-      g.addColorStop(0,   `rgba(5,18,12,${(.76*shade).toFixed(3)})`);
-      g.addColorStop(.50, `rgba(5,18,12,${(.46*shade).toFixed(3)})`);
-      g.addColorStop(1,   `rgba(5,18,12,${(.04*shade).toFixed(3)})`);
+      g.addColorStop(0,   `rgba(5,18,12,${(.78*shade).toFixed(3)})`);
+      g.addColorStop(.42, `rgba(5,18,12,${(.52*shade).toFixed(3)})`);
+      g.addColorStop(.70, `rgba(5,18,12,${(.08*shade).toFixed(3)})`);
+      g.addColorStop(1,   "rgba(5,18,12,0)");
       ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
       const v=ctx.createLinearGradient(0,0,0,H);
       v.addColorStop(0,  `rgba(0,0,0,${(.26*shade).toFixed(3)})`);
