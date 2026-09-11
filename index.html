@@ -152,6 +152,8 @@ George Rowe"></textarea>
     <input type="range" class="slider" id="nudgeX" min="0" max="100" value="50">
     <label>Zoom</label>
     <input type="range" class="slider" id="zoom" min="100" max="300" value="100">
+    <label>Photo strength</label>
+    <input type="range" class="slider" id="opacity" min="15" max="100" value="100">
     <label>Shade behind the text</label>
     <input type="range" class="slider" id="shade" min="0" max="100" value="0">
     <label>Vignette</label>
@@ -235,10 +237,11 @@ function teamNames(team){
 
 /* ---- state ---- */
 let state="matchday", photo=null, nudge=0.5, nudgeX=0.5, zoom=1, badge=new Image();
-let shade=0, vignette=0;
+let shade=0, vignette=0, photoAlpha=1;
 try{
   const sv=localStorage.getItem('tunley-shade');   if(sv!==null) shade=+sv/100;
   const vv=localStorage.getItem('tunley-vignette');if(vv!==null) vignette=+vv/100;
+  const pv=localStorage.getItem('tunley-opacity'); if(pv!==null) photoAlpha=+pv/100;
 }catch(e){}
 badge.src=BADGE_SRC;
 
@@ -341,17 +344,19 @@ function wrap(text,size,weight,maxW){
 }
 
 function drawPhoto(){
-  if(!photo){
-    const g=ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0,"#163a26");g.addColorStop(.46,"#123020");g.addColorStop(1,"#0d2419");
-    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-    return;
-  }
+  // club green underneath, always. at less than full strength the photo
+  // sinks into it rather than being blacked out.
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"#163a26");g.addColorStop(.46,"#123020");g.addColorStop(1,"#0d2419");
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  if(!photo) return;
   // cover-fit, auto-cropped, then zoomed and nudged around
   const s=Math.max(W/photo.width,H/photo.height)*zoom;
   const w=photo.width*s, h=photo.height*s;
   const x=(W-w)*nudgeX, y=(H-h)*nudge;
+  ctx.globalAlpha=photoAlpha;
   ctx.drawImage(photo,x,y,w,h);
+  ctx.globalAlpha=1;
 }
 
 /* with no photo the plain green look is left exactly as it was.
@@ -782,6 +787,11 @@ function load(f){
 document.getElementById('nudge').oninput =e=>{nudge =e.target.value/100;render()};
 document.getElementById('nudgeX').oninput=e=>{nudgeX=e.target.value/100;render()};
 document.getElementById('zoom').oninput  =e=>{zoom  =e.target.value/100;render()};
+document.getElementById('opacity').oninput=e=>{
+  photoAlpha=e.target.value/100;
+  try{localStorage.setItem('tunley-opacity',e.target.value);}catch(err){}
+  render();
+};
 document.getElementById('shade').oninput =e=>{
   shade=e.target.value/100;
   try{localStorage.setItem('tunley-shade',e.target.value);}catch(err){}
@@ -792,6 +802,7 @@ document.getElementById('vig').oninput   =e=>{
   try{localStorage.setItem('tunley-vignette',e.target.value);}catch(err){}
   render();
 };
+document.getElementById('opacity').value=Math.round(photoAlpha*100);
 document.getElementById('shade').value=Math.round(shade*100);
 document.getElementById('vig').value=Math.round(vignette*100);
 
