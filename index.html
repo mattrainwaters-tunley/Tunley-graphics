@@ -682,7 +682,9 @@ function renderSquad(){
 
   /* bottom line: opponent, date, kick off */
   const metaSize=34, metaLH=34;
-  const metaY = H-M-metaLH;
+  const ground=(venue||"").trim();
+  const groundSize=29;
+  const metaY = ground ? H-M-metaLH-42 : H-M-metaLH;
   const ruleY = metaY-28;
   ctx.fillStyle="rgba(255,255,255,.26)";
   ctx.fillRect(M,ruleY,maxW,2);
@@ -704,6 +706,19 @@ function renderSquad(){
     mx += ctx.measureText(part).width + gap;
   });
   ls("0px");
+
+  /* the ground, on its own line underneath */
+  if(ground){
+    ls("2.6px");
+    let gs=groundSize;
+    const gw=sz=>{ ctx.font="500 "+sz+"px 'Barlow Condensed',sans-serif";
+                   return ctx.measureText(ground.toUpperCase()).width; };
+    while(gw(gs)>maxW && gs>18) gs-=1;
+    ctx.font="500 "+gs+"px 'Barlow Condensed',sans-serif";
+    ctx.fillStyle="rgba(255,255,255,.62)";
+    ctx.fillText(ground.toUpperCase(), M, metaY+42);
+    ls("0px");
+  }
 
   /* the names, one column down the left */
   const names = squadNames().length ? squadNames()
