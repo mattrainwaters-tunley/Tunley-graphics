@@ -328,6 +328,45 @@ loadSquad();
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
 const W=1080,H=1350,M=64;
 const GREEN="#4CAF72", AMBER="#E8B84B", RED="#E03A3A";
+const BAND="#186B40";            // club green, dark enough for white text
+
+/* solid green strip along the bottom, so the fixture details never
+   have to fight the photo. returns the y it starts at. */
+function drawBottomBand(parts, second){
+  const bandH = second ? 142 : 104;
+  const top = H-bandH;
+  ctx.fillStyle=BAND; ctx.fillRect(0,top,W,bandH);
+
+  const maxW=W-M*2;
+  ctx.textBaseline="top";
+  let size=34, gap=26;
+  const lineW=(sz,g)=>{
+    ctx.font="600 "+sz+"px 'Barlow Condensed',sans-serif";
+    return parts.reduce((t,part)=>t+ctx.measureText(part).width+g,0)-g;
+  };
+  ls("3.7px");
+  while(lineW(size,gap)>maxW && size>20){ size-=1; gap=Math.max(14,gap-1); }
+  ctx.font="600 "+size+"px 'Barlow Condensed',sans-serif";
+  const y1 = second ? top+34 : top+Math.round((bandH-size*1.05)/2);
+  let x=M;
+  parts.forEach(part=>{
+    ctx.fillStyle = part==="·" ? "rgba(255,255,255,.50)" : "#fff";
+    ctx.fillText(part,x,y1);
+    x += ctx.measureText(part).width + gap;
+  });
+  if(second){
+    let ss=29;
+    const w2=sz=>{ ctx.font="500 "+sz+"px 'Barlow Condensed',sans-serif";
+                   return ctx.measureText(second.toUpperCase()).width; };
+    ls("2.6px");
+    while(w2(ss)>maxW && ss>18) ss-=1;
+    ctx.font="500 "+ss+"px 'Barlow Condensed',sans-serif";
+    ctx.fillStyle="rgba(255,255,255,.82)";
+    ctx.fillText(second.toUpperCase(), M, y1+46);
+  }
+  ls("0px");
+  return top;
+}
 
 function ls(v){ try{ctx.letterSpacing=v;}catch(e){} }
 
@@ -450,14 +489,11 @@ function render(){
     blocks.push({text:opp.toUpperCase(),size:104,weight:700,color:dimO?"rgba(255,255,255,.55)":"#fff",lh:104,right:os,gapBefore:6,shrink:true});
   }
 
-  blocks.push({rule:true,gapBefore:38,gapAfter:26});
-
   const meta = (state==="matchday"||state==="off")
     ? [niceDate(iso),"·",time,"·",venue.toUpperCase()]
     : state==="motm"
     ? ["v "+opp.toUpperCase(),"·",niceDate(iso)]
     : [niceDate(iso),"·",venue.toUpperCase()];
-  blocks.push({meta:meta,size:34,weight:500,lh:34,spacing:"3.7px"});
 
   if(state==="motm"){
     const n=document.getElementById('note').value.trim();
@@ -477,13 +513,15 @@ function render(){
   // total height, then draw upward from the bottom
   let total=0;
   blocks.forEach(b=>{ total += (b.gapBefore||0) + (b.rule?2:b.lh) + (b.gapAfter||0); });
-  let y = H - M - total;
+  const bandTop = H-104;
+  let y = bandTop - 42 - total;
 
   // background first, with the wash hugging the block of text
   ctx.clearRect(0,0,W,H);
   drawPhoto();
   drawScrim(y);
   if(badge.complete && badge.naturalWidth) ctx.drawImage(badge,M,56,185,185);
+  drawBottomBand(meta);
 
   if(state==="off") drawOffBand(250, y-30);
 
@@ -603,32 +641,13 @@ function renderMatchdaySquad(){
   oLines.forEach((l,i)=>ctx.fillText(l,M,y+i*oLH));
   y += oLines.length*oLH;
 
-  /* bottom line: date, kick off, venue */
-  const metaSize=37, metaY=H-M-metaSize, ruleY=metaY-26;
-  ctx.fillStyle="rgba(255,255,255,.26)";
-  ctx.fillRect(M,ruleY,maxW,2);
-  const meta=[niceDate(iso),"·",time,"·",venue.toUpperCase()];
-  ls("3.7px");
-  let ms=metaSize, gap=26;
-  const mW=(sz,g)=>{
-    ctx.font="500 "+sz+"px 'Barlow Condensed',sans-serif";
-    return meta.reduce((t,part)=>t+ctx.measureText(part).width+g,0)-g;
-  };
-  while(mW(ms,gap)>maxW && ms>22){ ms-=1; gap=Math.max(14,gap-1); }
-  ctx.font="500 "+ms+"px 'Barlow Condensed',sans-serif";
-  let mx=M;
-  meta.forEach((part,i)=>{
-    ctx.fillStyle = part==="·" ? "rgba(255,255,255,.42)"
-                  : (i===meta.length-1 ? "rgba(255,255,255,.62)" : "#fff");
-    ctx.fillText(part,mx,metaY);
-    mx += ctx.measureText(part).width + gap;
-  });
-  ls("0px");
+  /* green band along the bottom */
+  const bandTop = drawBottomBand([niceDate(iso),"·",time,"·",venue.toUpperCase()]);
 
   /* the squad, in whatever room is left */
   const names = squadNames().length ? squadNames() : ["Add the squad","one name per line"];
   const zoneTop = y + 44;
-  const avail = (ruleY-34) - zoneTop;
+  const avail = (bandTop-40) - zoneTop;
   const twoCol = names.length>6;
   const rows = twoCol?Math.ceil(names.length/2):names.length;
   const colW = twoCol?(maxW-40)/2:maxW;
@@ -685,51 +704,15 @@ function renderSquad(){
   ls("0px");
   const headerBottom = Math.max(bY+bW, ty+stackH);
 
-  /* bottom line: opponent, date, kick off */
-  const metaSize=34, metaLH=34;
+  /* green band along the bottom: fixture, then the ground under it */
   const ground=(venue||"").trim();
-  const groundSize=29;
-  const metaY = ground ? H-M-metaLH-42 : H-M-metaLH;
-  const ruleY = metaY-28;
-  ctx.fillStyle="rgba(255,255,255,.26)";
-  ctx.fillRect(M,ruleY,maxW,2);
-  const meta=["v "+opp.toUpperCase(),"·",niceDate(iso),"·",time];
-  ls("3.7px");
-  // shrink so a long opponent name cannot run off the edge
-  let ms=metaSize, gap=26;
-  const metaW=(sz,g)=>{
-    ctx.font="500 "+sz+"px 'Barlow Condensed',sans-serif";
-    return meta.reduce((t,part)=>t+ctx.measureText(part).width+g,0)-g;
-  };
-  while(metaW(ms,gap)>maxW && ms>20){ ms-=1; gap=Math.max(14,gap-1); }
-  ctx.font="500 "+ms+"px 'Barlow Condensed',sans-serif";
-  let mx=M;
-  meta.forEach((part,i)=>{
-    ctx.fillStyle = part==="·" ? "rgba(255,255,255,.42)"
-                  : (i===meta.length-1 ? "rgba(255,255,255,.62)" : "#fff");
-    ctx.fillText(part,mx,metaY);
-    mx += ctx.measureText(part).width + gap;
-  });
-  ls("0px");
-
-  /* the ground, on its own line underneath */
-  if(ground){
-    ls("2.6px");
-    let gs=groundSize;
-    const gw=sz=>{ ctx.font="500 "+sz+"px 'Barlow Condensed',sans-serif";
-                   return ctx.measureText(ground.toUpperCase()).width; };
-    while(gw(gs)>maxW && gs>18) gs-=1;
-    ctx.font="500 "+gs+"px 'Barlow Condensed',sans-serif";
-    ctx.fillStyle="rgba(255,255,255,.62)";
-    ctx.fillText(ground.toUpperCase(), M, metaY+42);
-    ls("0px");
-  }
+  const bandTop = drawBottomBand(["v "+opp.toUpperCase(),"·",niceDate(iso),"·",time], ground||null);
 
   /* the names, one column down the left */
   const names = squadNames().length ? squadNames()
               : ["Add the squad","one name per line"];
   const listTop = headerBottom+62;
-  const listBottom = ruleY-44;
+  const listBottom = bandTop-46;
   const avail = listBottom-listTop;
   const colW = 630;
   let size=54;
