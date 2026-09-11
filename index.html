@@ -102,6 +102,7 @@
     <button data-state="motm" aria-pressed="false">Man of the match</button>
     <button data-state="xi" aria-pressed="false">Squad</button>
     <button data-state="off" aria-pressed="false">Match off</button>
+    <button data-state="mdsquad" aria-pressed="false" class="wide">Matchday + squad</button>
   </div>
 
   <div id="scoreArea" style="display:none">
@@ -384,6 +385,7 @@ function drawOffBand(safeTop,safeBottom){
 
 function render(){
   if(state==="xi"){ renderSquad(); return; }
+  if(state==="mdsquad"){ renderMatchdaySquad(); return; }
   const f=FIXTURES[sel.value];
   const [team,iso,time,opp,ha,venue]=f;
   ctx.clearRect(0,0,W,H);
@@ -522,6 +524,99 @@ function drawSquadScrim(){
   }
 }
 
+/* ---- matchday and squad on one graphic ---- */
+function renderMatchdaySquad(){
+  const f=FIXTURES[sel.value];
+  const [team,iso,time,opp,ha,venue]=f;
+  const maxW=W-M*2, us=teamNames(team);
+
+  ctx.clearRect(0,0,W,H);
+  drawPhoto();
+  drawSquadScrim();
+  ctx.textBaseline="top";
+
+  /* crest, with MATCHDAY beside it */
+  const bW=132, bY=54;
+  if(badge.complete && badge.naturalWidth) ctx.drawImage(badge,M,bY,bW,bW);
+  ctx.font="600 28px 'Barlow Condensed',sans-serif";
+  ls("12.6px"); ctx.fillStyle=GREEN;
+  ctx.fillText("MATCHDAY", M+bW+26, bY+52);
+  ls("0px");
+
+  /* us, then the opponent big */
+  let y = bY+bW+40;
+  ctx.fillStyle="rgba(255,255,255,.78)";
+  ctx.font="700 46px 'Barlow Condensed',sans-serif";
+  ls("1.2px");
+  ctx.fillText(us.long, M, y);
+  ls("0px");
+  y += 50;
+
+  ctx.fillStyle="rgba(255,255,255,.55)";
+  ctx.font="400 34px 'Barlow Condensed',sans-serif";
+  ctx.fillText("v", M, y);
+  y += 40;
+
+  let oSize=92, oLines=wrap(opp.toUpperCase(),oSize,700,maxW);
+  while(oLines.length>2 && oSize>52){ oSize-=4; oLines=wrap(opp.toUpperCase(),oSize,700,maxW); }
+  const oLH=Math.round(oSize*0.92);
+  ctx.fillStyle="#fff";
+  ctx.font="700 "+oSize+"px 'Barlow Condensed',sans-serif";
+  oLines.forEach((l,i)=>ctx.fillText(l,M,y+i*oLH));
+  y += oLines.length*oLH;
+
+  /* bottom line: date, kick off, venue */
+  const metaSize=32, metaY=H-M-metaSize, ruleY=metaY-26;
+  ctx.fillStyle="rgba(255,255,255,.26)";
+  ctx.fillRect(M,ruleY,maxW,2);
+  const meta=[niceDate(iso),"·",time,"·",venue.toUpperCase()];
+  ls("3.7px");
+  let ms=metaSize, gap=24;
+  const mW=(sz,g)=>{
+    ctx.font="500 "+sz+"px 'Barlow Condensed',sans-serif";
+    return meta.reduce((t,part)=>t+ctx.measureText(part).width+g,0)-g;
+  };
+  while(mW(ms,gap)>maxW && ms>19){ ms-=1; gap=Math.max(13,gap-1); }
+  ctx.font="500 "+ms+"px 'Barlow Condensed',sans-serif";
+  let mx=M;
+  meta.forEach((part,i)=>{
+    ctx.fillStyle = part==="·" ? "rgba(255,255,255,.42)"
+                  : (i===meta.length-1 ? "rgba(255,255,255,.62)" : "#fff");
+    ctx.fillText(part,mx,metaY);
+    mx += ctx.measureText(part).width + gap;
+  });
+  ls("0px");
+
+  /* the squad, in whatever room is left */
+  const names = squadNames().length ? squadNames() : ["Add the squad","one name per line"];
+  const zoneTop = y + 44;
+  const avail = (ruleY-34) - zoneTop;
+  const twoCol = names.length>6;
+  const rows = twoCol?Math.ceil(names.length/2):names.length;
+  const colW = twoCol?(maxW-40)/2:maxW;
+  let size=52;
+  const rowOf=v=>Math.max(Math.round(v*1.3), v+12);
+  while(size>18){
+    ctx.font="600 "+size+"px 'Barlow Condensed',sans-serif";
+    const widest=Math.max.apply(null,names.map(n=>ctx.measureText(n.toUpperCase()).width));
+    if(rows*rowOf(size)<=avail && widest<=colW-10) break;
+    size-=2;
+  }
+  const rowH=rowOf(size);
+  // sit the block in the middle of whatever room is left, so there is no
+  // pool of empty space above the bottom line
+  const listTop = zoneTop + Math.max(0,(avail - rows*rowH)/2);
+  ctx.font="600 "+size+"px 'Barlow Condensed',sans-serif";
+  ls("0.6px");
+  names.forEach((n,i)=>{
+    const col=twoCol?Math.floor(i/rows):0;
+    const row=twoCol?i%rows:i;
+    ctx.fillStyle="#fff";
+    ctx.fillText(n.toUpperCase(), M+col*(colW+40), listTop+row*rowH);
+  });
+  ls("0px");
+}
+
 function renderSquad(){
   const f=FIXTURES[sel.value];
   const [team,iso,time,opp,ha,venue]=f;
@@ -619,7 +714,7 @@ document.querySelectorAll('.states button').forEach(btn=>{
     document.getElementById('scorerWrap').style.display = state==="full"?"block":"none";
     document.getElementById('motmArea').style.display = state==="motm"?"block":"none";
     document.getElementById('offArea').style.display = state==="off"?"block":"none";
-    document.getElementById('xiArea').style.display = state==="xi"?"block":"none";
+    document.getElementById('xiArea').style.display = (state==="xi"||state==="mdsquad")?"block":"none";
     render();
   };
 });
