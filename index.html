@@ -152,6 +152,10 @@ George Rowe"></textarea>
     <input type="range" class="slider" id="nudgeX" min="0" max="100" value="50">
     <label>Zoom</label>
     <input type="range" class="slider" id="zoom" min="100" max="300" value="100">
+    <label>Shade behind the text</label>
+    <input type="range" class="slider" id="shade" min="0" max="100" value="0">
+    <label>Vignette</label>
+    <input type="range" class="slider" id="vig" min="0" max="100" value="0">
   </div>
 
   <button class="dl" id="dl">Save image</button>
@@ -231,6 +235,11 @@ function teamNames(team){
 
 /* ---- state ---- */
 let state="matchday", photo=null, nudge=0.5, nudgeX=0.5, zoom=1, badge=new Image();
+let shade=0, vignette=0;
+try{
+  const sv=localStorage.getItem('tunley-shade');   if(sv!==null) shade=+sv/100;
+  const vv=localStorage.getItem('tunley-vignette');if(vv!==null) vignette=+vv/100;
+}catch(e){}
 badge.src=BADGE_SRC;
 
 const sel=document.getElementById('fixture');
@@ -345,15 +354,31 @@ function drawPhoto(){
   ctx.drawImage(photo,x,y,w,h);
 }
 
+/* with no photo the plain green look is left exactly as it was.
+   over a photo, nothing is darkened unless you ask for it. */
+function sc(a){ return photo ? a*shade : a; }
+
+function drawVignette(){
+  if(!photo || vignette<=0) return;
+  const outer=Math.hypot(W,H)/2;            // reaches full strength at the corners
+  const g=ctx.createRadialGradient(W/2,H/2,outer*0.22, W/2,H/2,outer);
+  g.addColorStop(0,  "rgba(0,0,0,0)");
+  g.addColorStop(.45,`rgba(0,0,0,${(0.14*vignette).toFixed(3)})`);
+  g.addColorStop(.75,`rgba(0,0,0,${(0.46*vignette).toFixed(3)})`);
+  g.addColorStop(1,  `rgba(0,0,0,${(0.95*vignette).toFixed(3)})`);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+}
+
 function drawScrim(){
   const g=ctx.createLinearGradient(0,0,0,H);
   const heavy = state!=="matchday";
-  g.addColorStop(0,   `rgba(0,0,0,${heavy?.36:.30})`);
-  g.addColorStop(.25, `rgba(0,0,0,${heavy?.06:0})`);
-  g.addColorStop(.40, `rgba(0,0,0,${heavy?.10:0})`);
-  g.addColorStop(.76, `rgba(0,0,0,${heavy?.80:.72})`);
-  g.addColorStop(1,   `rgba(0,0,0,${heavy?.92:.88})`);
+  g.addColorStop(0,   `rgba(0,0,0,${sc(heavy?.36:.30)})`);
+  g.addColorStop(.25, `rgba(0,0,0,${sc(heavy?.06:0)})`);
+  g.addColorStop(.40, `rgba(0,0,0,${sc(heavy?.10:0)})`);
+  g.addColorStop(.76, `rgba(0,0,0,${sc(heavy?.80:.72)})`);
+  g.addColorStop(1,   `rgba(0,0,0,${sc(heavy?.92:.88)})`);
   ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  drawVignette();
 }
 
 function drawOffBand(safeTop,safeBottom){
@@ -505,17 +530,20 @@ function render(){
        opponent / date / kick off along the bottom ---- */
 function drawSquadScrim(){
   if(photo){
-    const g=ctx.createLinearGradient(0,0,W,0);
-    g.addColorStop(0,   "rgba(5,18,12,.76)");
-    g.addColorStop(.50, "rgba(5,18,12,.46)");
-    g.addColorStop(1,   "rgba(5,18,12,.04)");
-    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-    const v=ctx.createLinearGradient(0,0,0,H);
-    v.addColorStop(0,  "rgba(0,0,0,.26)");
-    v.addColorStop(.32,"rgba(0,0,0,0)");
-    v.addColorStop(.84,"rgba(0,0,0,.14)");
-    v.addColorStop(1,  "rgba(0,0,0,.50)");
-    ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
+    if(shade>0){
+      const g=ctx.createLinearGradient(0,0,W,0);
+      g.addColorStop(0,   `rgba(5,18,12,${(.76*shade).toFixed(3)})`);
+      g.addColorStop(.50, `rgba(5,18,12,${(.46*shade).toFixed(3)})`);
+      g.addColorStop(1,   `rgba(5,18,12,${(.04*shade).toFixed(3)})`);
+      ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+      const v=ctx.createLinearGradient(0,0,0,H);
+      v.addColorStop(0,  `rgba(0,0,0,${(.26*shade).toFixed(3)})`);
+      v.addColorStop(.32,"rgba(0,0,0,0)");
+      v.addColorStop(.84,`rgba(0,0,0,${(.14*shade).toFixed(3)})`);
+      v.addColorStop(1,  `rgba(0,0,0,${(.50*shade).toFixed(3)})`);
+      ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
+    }
+    drawVignette();
   }else{
     const g=ctx.createLinearGradient(0,0,0,H);
     g.addColorStop(0,"rgba(0,0,0,.16)");
@@ -743,6 +771,7 @@ function load(f){
     document.getElementById('nudge').value=50;
     document.getElementById('nudgeX').value=50;
     document.getElementById('zoom').value=100;
+    // shade and vignette are left where you set them
     drop.innerHTML="<b>Photo loaded</b>click to swap it";
     document.getElementById('nudgeWrap').style.display="block";
     render();
@@ -753,6 +782,18 @@ function load(f){
 document.getElementById('nudge').oninput =e=>{nudge =e.target.value/100;render()};
 document.getElementById('nudgeX').oninput=e=>{nudgeX=e.target.value/100;render()};
 document.getElementById('zoom').oninput  =e=>{zoom  =e.target.value/100;render()};
+document.getElementById('shade').oninput =e=>{
+  shade=e.target.value/100;
+  try{localStorage.setItem('tunley-shade',e.target.value);}catch(err){}
+  render();
+};
+document.getElementById('vig').oninput   =e=>{
+  vignette=e.target.value/100;
+  try{localStorage.setItem('tunley-vignette',e.target.value);}catch(err){}
+  render();
+};
+document.getElementById('shade').value=Math.round(shade*100);
+document.getElementById('vig').value=Math.round(vignette*100);
 
 document.getElementById('dl').onclick=()=>{
   const f=FIXTURES[sel.value];
