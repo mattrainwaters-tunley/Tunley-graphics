@@ -686,18 +686,15 @@ function renderDouble(){
   drawScrim(y-30);
   if(badge.complete && badge.naturalWidth) ctx.drawImage(badge,M,56,150,150);
 
-  /* state label beside the crest */
   ctx.textBaseline="top";
-  ctx.font="600 30px 'Barlow Condensed',sans-serif";
-  ls("12.6px"); ctx.fillStyle=GREEN;
-  ctx.fillText(isFull?"FULL TIME":"MATCHDAY", M+150+28, 56+58);
-  ls("0px");
 
   [a,b].forEach(f=>{
     /* which team */
     ctx.font="700 35px 'Barlow Condensed',sans-serif";
     ls("11px"); ctx.fillStyle=GREEN;
+    if(photo){ ctx.shadowColor="rgba(0,0,0,.65)"; ctx.shadowBlur=16; ctx.shadowOffsetY=2; }
     ctx.fillText(tag(f[0]), M, y);
+    ctx.shadowColor="transparent"; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
     ls("0px");
     y += 54;
 
@@ -748,7 +745,8 @@ function renderDouble(){
     y += gap;
   });
 
-  drawBottomBand(same?[niceDate(a[1])]:[niceDate(a[1]),"·",niceDate(b[1])], null, true);
+  const dates = same?[niceDate(a[1])]:[niceDate(a[1]),"·",niceDate(b[1])];
+  drawBottomBand([isFull?"FULL TIME":"MATCHDAY","·"].concat(dates), null, true);
 }
 
 /* ---- matchday and squad on one graphic ---- */
