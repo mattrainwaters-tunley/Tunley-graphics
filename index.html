@@ -173,7 +173,7 @@ George Rowe"></textarea>
     <label>Photo strength</label>
     <input type="range" class="slider" id="opacity" min="15" max="100" value="100">
     <label>Shade behind the text</label>
-    <input type="range" class="slider" id="shade" min="0" max="100" value="0">
+    <input type="range" class="slider" id="shade" min="0" max="100" value="40">
     <label>Vignette</label>
     <input type="range" class="slider" id="vig" min="0" max="100" value="0">
   </div>
@@ -255,9 +255,11 @@ function teamNames(team){
 
 /* ---- state ---- */
 let state="matchday", photo=null, nudge=0.5, nudgeX=0.5, zoom=1, badge=new Image();
-let shade=0, vignette=0, photoAlpha=1;
+let shade=0.40, vignette=0, photoAlpha=1;
 try{
-  const sv=localStorage.getItem('tunley-shade');   if(sv!==null) shade=+sv/100;
+  // new key on purpose: the old one holds 0 for anyone who used the tool
+  // before shade had a sensible default, and that would override it
+  const sv=localStorage.getItem('tunley-shade2');  if(sv!==null) shade=+sv/100;
   const vv=localStorage.getItem('tunley-vignette');if(vv!==null) vignette=+vv/100;
   const pv=localStorage.getItem('tunley-opacity'); if(pv!==null) photoAlpha=+pv/100;
 }catch(e){}
@@ -686,7 +688,7 @@ function renderDouble(){
   const blockH=(f,big)=>{
     const lh=Math.round(big*0.92);
     const body = isFull ? 2*Math.round(big*1.02) : bodyLines(f,big).length*lh;
-    return 42 + 12 + body + (infoFor(f).length?56:0);
+    return 52 + 12 + body + (infoFor(f).length?56:0);
   };
 
   let big = isFull?66:78, gap=58, hA, hB;
@@ -708,11 +710,16 @@ function renderDouble(){
 
   [a,b].forEach(f=>{
     /* which team */
-    ctx.font="700 35px 'Barlow Condensed',sans-serif";
-    ls("11px"); ctx.fillStyle=labelGreen(); lift(true);
+    ctx.font="700 44px 'Barlow Condensed',sans-serif";
+    ls("8px"); ctx.fillStyle=labelGreen();
+    // these labels are small and coloured, so they get a denser shadow
+    // than the white text around them
+    if(photo){ ctx.shadowColor="rgba(0,0,0,.85)"; ctx.shadowBlur=12; ctx.shadowOffsetY=2; }
     ctx.fillText(tag(f[0]), M, y);
+    ctx.fillText(tag(f[0]), M, y);   // second pass deepens the shadow
+    lift(false);
     ls("0px");
-    y += 54;
+    y += 64;
 
     if(isFull){
       const [ts,os]=scoresFor(f);
@@ -976,7 +983,7 @@ document.getElementById('opacity').oninput=e=>{
 };
 document.getElementById('shade').oninput =e=>{
   shade=e.target.value/100;
-  try{localStorage.setItem('tunley-shade',e.target.value);}catch(err){}
+  try{localStorage.setItem('tunley-shade2',e.target.value);}catch(err){}
   render();
 };
 document.getElementById('vig').oninput   =e=>{
