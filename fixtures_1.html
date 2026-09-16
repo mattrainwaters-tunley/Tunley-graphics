@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tunley Athletic — fixture editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:#14161a;color:#e6eaef;
+    font-family:'Barlow Condensed',system-ui,sans-serif;
+    padding:26px 18px 80px;
+  }
+  .wrap{max-width:820px;margin:0 auto}
+  h1{font-size:30px;font-weight:700;letter-spacing:.04em}
+  .sub{font-size:17px;color:#79828d;margin:4px 0 22px}
+
+  label{display:block;font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+        color:#7f8a95;margin:0 0 5px}
+  input,select{
+    width:100%;background:#1e2229;border:1px solid #333a44;color:#e6eaef;
+    border-radius:7px;padding:10px 11px;font-size:17px;
+    font-family:'Barlow Condensed',sans-serif;
+  }
+  input:focus,select:focus{outline:2px solid #4CAF72;outline-offset:1px;border-color:transparent}
+
+  button{
+    background:#4CAF72;color:#06210f;border:0;border-radius:8px;
+    padding:12px 20px;font-size:17px;font-weight:700;letter-spacing:.11em;
+    text-transform:uppercase;cursor:pointer;font-family:inherit;
+  }
+  button:hover{background:#5cc281}
+  button:disabled{background:#2a3138;color:#5d6670;cursor:not-allowed}
+  button.ghost{background:transparent;color:#aeb7c1;border:1px solid #333a44;font-weight:600}
+  button.ghost:hover{background:#1e2229;color:#e6eaef}
+
+  .card{background:#191d23;border:1px solid #262c34;border-radius:11px;padding:16px;margin-bottom:12px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  .grid .full{grid-column:1/-1}
+
+  .tag{display:inline-block;font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+       color:#4CAF72;font-weight:600;margin-bottom:9px}
+  .tag.past{color:#7f8a95}
+
+  .teams{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 18px}
+  .teams button{
+    background:#1e2229;border:1px solid #333a44;color:#aeb7c1;
+    padding:8px 15px;font-size:14px;letter-spacing:.09em;font-weight:600;
+  }
+  .teams button[aria-pressed="true"]{background:#4CAF72;border-color:#4CAF72;color:#06210f}
+
+  .row{display:flex;gap:11px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  .msg{font-size:16px;color:#79828d}
+  .msg.ok{color:#4CAF72}
+  .msg.bad{color:#E0736A}
+  .note{font-size:15px;color:#69727c;line-height:1.55;margin-top:10px}
+  .signin{max-width:380px}
+  .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+
+  @media (max-width:640px){
+    .grid{grid-template-columns:1fr}
+    h1{font-size:25px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Fixture editor</h1>
+  <div class="sub">Change a date, kick off time, opponent or ground. The website, the app and the graphic maker all read from here.</div>
+
+  <!-- signed out -->
+  <div id="signinBox" class="signin" style="display:none">
+    <div class="card">
+      <label>Email</label>
+      <input type="email" id="email" autocomplete="username" placeholder="you@example.com">
+      <div style="height:11px"></div>
+      <label>Password</label>
+      <input type="password" id="password" autocomplete="current-password">
+      <div class="row">
+        <button id="signin">Sign in</button>
+        <span class="msg" id="signinMsg"></span>
+      </div>
+      <div class="note">Only club admins can change fixtures. Everyone else can read them, which is how the website and app work.</div>
+    </div>
+  </div>
+
+  <!-- signed in -->
+  <div id="editor" style="display:none">
+    <div class="bar">
+      <span class="msg" id="who"></span>
+      <button class="ghost" id="signout">Sign out</button>
+    </div>
+
+    <div class="teams" id="teams">
+      <button data-team="all" aria-pressed="true">All</button>
+      <button data-team="Firsts" aria-pressed="false">Firsts</button>
+      <button data-team="Reserves" aria-pressed="false">Reserves</button>
+      <button data-team="U18s" aria-pressed="false">U18s</button>
+      <button data-team="past" aria-pressed="false">Played</button>
+    </div>
+
+    <div id="list"></div>
+    <div class="msg" id="listMsg">Loading fixtures…</div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const SUPABASE_URL="https://gxbvuqtjkpynbhjqggxg.supabase.co";
+const SUPABASE_KEY="sb_publishable_UOFrYxeVOGnMMdCtijIPVA_ZCZ2Q1nt";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const TZ="Europe/London";
+let FIXTURES=[], VENUES=[], filter="all";
+
+/* ---- time helpers ----
+   Kick off times are stored in UTC. Everything on this page is British time,
+   whatever time zone the person editing happens to be sitting in. */
+function londonParts(iso){
+  const f=new Intl.DateTimeFormat('en-GB',{timeZone:TZ,year:'numeric',month:'2-digit',
+    day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+  const p={}; f.formatToParts(new Date(iso)).forEach(x=>p[x.type]=x.value);
+  return {date:p.year+"-"+p.month+"-"+p.day, time:p.hour+":"+p.minute};
+}
+// British wall clock in, UTC instant out. Two passes settle the clock change.
+function londonToUTC(dateStr,timeStr){
+  const [y,m,d]=dateStr.split("-").map(Number);
+  const [hh,mm]=timeStr.split(":").map(Number);
+  const wanted=Date.UTC(y,m-1,d,hh,mm);
+  let t=wanted;
+  for(let i=0;i<2;i++){
+    const p=londonParts(new Date(t).toISOString());
+    const [py,pm,pd]=p.date.split("-").map(Number);
+    const [ph,pmin]=p.time.split(":").map(Number);
+    const shown=Date.UTC(py,pm-1,pd,ph,pmin);
+    t += wanted-shown;
+  }
+  return new Date(t).toISOString();
+}
+const DAY=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const MON=["Jan","Feb","Mar","Apr","May","June","July","Aug","Sept","Oct","Nov","Dec"];
+function pretty(dateStr){
+  const [y,m,d]=dateStr.split("-").map(Number);
+  const dt=new Date(Date.UTC(y,m-1,d,12));
+  return DAY[dt.getUTCDay()]+" "+d+" "+MON[m-1]+" "+y;
+}
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---- session ---- */
+async function refresh(){
+  const {data:{session}}=await sb.auth.getSession();
+  const inEditor=!!session;
+  document.getElementById('signinBox').style.display=inEditor?"none":"block";
+  document.getElementById('editor').style.display=inEditor?"block":"none";
+  if(inEditor){
+    document.getElementById('who').textContent="Signed in as "+session.user.email;
+    await load();
+  }
+}
+
+document.getElementById('signin').onclick=async()=>{
+  const msg=document.getElementById('signinMsg');
+  const btn=document.getElementById('signin');
+  msg.className="msg"; msg.textContent="Signing in…"; btn.disabled=true;
+  const {error}=await sb.auth.signInWithPassword({
+    email:document.getElementById('email').value.trim(),
+    password:document.getElementById('password').value
+  });
+  btn.disabled=false;
+  if(error){ msg.className="msg bad"; msg.textContent=error.message; return; }
+  msg.textContent="";
+  refresh();
+};
+document.getElementById('password').addEventListener('keydown',e=>{
+  if(e.key==="Enter") document.getElementById('signin').click();
+});
+document.getElementById('signout').onclick=async()=>{ await sb.auth.signOut(); refresh(); };
+
+/* ---- data ---- */
+async function load(){
+  const listMsg=document.getElementById('listMsg');
+  listMsg.className="msg"; listMsg.textContent="Loading fixtures…";
+  const [mx,vx]=await Promise.all([
+    sb.from('matches').select('id,team,opponent,match_date,home_away,competition,venue,venue_id,status,tunley_score,opponent_score').order('match_date'),
+    sb.from('venues').select('id,team_name,venue_name,postcode').order('venue_name')
+  ]);
+  if(mx.error||vx.error){
+    listMsg.className="msg bad";
+    listMsg.textContent="Could not load: "+((mx.error||vx.error).message);
+    return;
+  }
+  FIXTURES=mx.data; VENUES=vx.data;
+  listMsg.textContent="";
+  render();
+}
+
+function isPast(f){
+  return (f.status||"").toLowerCase()==="completed" || new Date(f.match_date) < new Date();
+}
+
+function render(){
+  const list=document.getElementById('list');
+  const rows=FIXTURES.filter(f=>{
+    if(filter==="past") return isPast(f);
+    if(filter==="all")  return !isPast(f);
+    return f.team===filter && !isPast(f);
+  });
+  if(!rows.length){ list.innerHTML='<div class="msg">Nothing here.</div>'; return; }
+
+  list.innerHTML=rows.map(f=>{
+    const p=londonParts(f.match_date);
+    const venueOpts=['<option value="">No ground set</option>'].concat(
+      VENUES.map(v=>`<option value="${v.id}"${v.id===f.venue_id?' selected':''}>`
+        +esc(v.venue_name)+(v.postcode?" · "+esc(v.postcode):"")+`</option>`)
+    ).join("");
+    const score = (f.tunley_score!=null&&f.opponent_score!=null)
+      ? ` · ${f.tunley_score}-${f.opponent_score}` : "";
+    return `
+    <div class="card" data-id="${f.id}">
+      <span class="tag${isPast(f)?' past':''}">${esc(f.team)}${score}</span>
+      <div class="grid">
+        <div><label>Date</label><input type="date" class="f-date" value="${p.date}"></div>
+        <div><label>Kick off (British time)</label><input type="time" class="f-time" value="${p.time}"></div>
+        <div class="full"><label>Opponent</label><input type="text" class="f-opp" value="${esc(f.opponent)}"></div>
+        <div>
+          <label>Home or away</label>
+          <select class="f-ha">
+            <option value="Home"${f.home_away==="Home"?" selected":""}>Home</option>
+            <option value="Away"${f.home_away==="Away"?" selected":""}>Away</option>
+          </select>
+        </div>
+        <div><label>Competition</label><input type="text" class="f-comp" value="${esc(f.competition)}"></div>
+        <div class="full"><label>Ground</label><select class="f-venue">${venueOpts}</select></div>
+      </div>
+      <div class="row">
+        <button class="f-save">Save</button>
+        <span class="msg f-msg"></span>
+      </div>
+    </div>`;
+  }).join("");
+
+  list.querySelectorAll('.f-save').forEach(btn=>{
+    btn.onclick=()=>save(btn.closest('.card'));
+  });
+}
+
+async function save(card){
+  const id=+card.dataset.id;
+  const msg=card.querySelector('.f-msg');
+  const btn=card.querySelector('.f-save');
+  // keep the f-msg hook when restyling, or the next save cannot find it
+  const say=(kind,text)=>{ msg.className="msg f-msg"+(kind?" "+kind:""); msg.textContent=text; };
+  const date=card.querySelector('.f-date').value;
+  const time=card.querySelector('.f-time').value;
+  const opp =card.querySelector('.f-opp').value.trim();
+  const ha  =card.querySelector('.f-ha').value;
+  const comp=card.querySelector('.f-comp').value.trim();
+  const ven =card.querySelector('.f-venue').value;
+
+  say("","");
+  if(!date||!time){ say("bad","Date and kick off are both needed."); return; }
+  if(!opp){ say("bad","Opponent cannot be empty."); return; }
+
+  btn.disabled=true; say("","Saving…");
+  const {data,error}=await sb.rpc('update_match_details',{
+    p_match_id:id,
+    p_match_date:londonToUTC(date,time),
+    p_opponent:opp,
+    p_home_away:ha,
+    p_competition:comp,
+    p_venue_id: ven==="" ? null : +ven
+  });
+  btn.disabled=false;
+
+  if(error){ say("bad",error.message); return; }
+
+  const i=FIXTURES.findIndex(f=>f.id===id);
+  if(i>=0) FIXTURES[i]=Object.assign({},FIXTURES[i],data);
+  say("ok","Saved, "+pretty(date)+" at "+time);
+}
+
+document.querySelectorAll('#teams button').forEach(b=>{
+  b.onclick=()=>{
+    filter=b.dataset.team;
+    document.querySelectorAll('#teams button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+    render();
+  };
+});
+
+sb.auth.onAuthStateChange(()=>refresh());
+refresh();
+</script>
+</body>
+</html>
