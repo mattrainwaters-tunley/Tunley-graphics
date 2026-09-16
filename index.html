@@ -364,21 +364,22 @@ const BAND="#186B40";            // club green, dark enough for white text
 
 /* solid green strip along the bottom, so the fixture details never
    have to fight the photo. returns the y it starts at. */
-function drawBottomBand(parts, second){
-  const bandH = second ? 142 : 104;
+function drawBottomBand(parts, second, big){
+  const bandH = second ? 142 : (big ? 116 : 104);
   const top = H-bandH;
   ctx.fillStyle=BAND; ctx.fillRect(0,top,W,bandH);
 
   const maxW=W-M*2;
   ctx.textBaseline="top";
-  let size=34, gap=26;
+  const wt = big ? "700" : "600";
+  let size = big ? 42 : 34, gap=26;
   const lineW=(sz,g)=>{
-    ctx.font="600 "+sz+"px 'Barlow Condensed',sans-serif";
+    ctx.font=wt+" "+sz+"px 'Barlow Condensed',sans-serif";
     return parts.reduce((t,part)=>t+ctx.measureText(part).width+g,0)-g;
   };
   ls("3.7px");
   while(lineW(size,gap)>maxW && size>20){ size-=1; gap=Math.max(14,gap-1); }
-  ctx.font="600 "+size+"px 'Barlow Condensed',sans-serif";
+  ctx.font=wt+" "+size+"px 'Barlow Condensed',sans-serif";
   const y1 = second ? top+34 : top+Math.round((bandH-size*1.05)/2);
   let x=M;
   parts.forEach(part=>{
@@ -659,7 +660,7 @@ function renderDouble(){
     return parts.flatMap((p,i)=>i?["·",p]:[p]);
   };
 
-  const bandTop = H-104;
+  const bandTop = H-116;
   const top = 56+150+70;
   const room = bandTop-40-top;
 
@@ -667,7 +668,7 @@ function renderDouble(){
   const blockH=(f,big)=>{
     const lh=Math.round(big*0.92);
     const body = isFull ? 2*Math.round(big*1.02) : bodyLines(f,big).length*lh;
-    return 34 + 12 + body + (infoFor(f).length?42:0);
+    return 42 + 12 + body + (infoFor(f).length?50:0);
   };
 
   let big = isFull?66:78, gap=58, hA, hB;
@@ -694,11 +695,11 @@ function renderDouble(){
 
   [a,b].forEach(f=>{
     /* which team */
-    ctx.font="600 28px 'Barlow Condensed',sans-serif";
+    ctx.font="700 35px 'Barlow Condensed',sans-serif";
     ls("11px"); ctx.fillStyle=GREEN;
     ctx.fillText(tag(f[0]), M, y);
     ls("0px");
-    y += 46;
+    y += 54;
 
     if(isFull){
       const [ts,os]=scoresFor(f);
@@ -730,24 +731,24 @@ function renderDouble(){
     const info=infoFor(f);
     if(info.length){
       ls("3px");
-      let is=28, ig=22;
-      const iw=(sz,g)=>{ ctx.font="500 "+sz+"px 'Barlow Condensed',sans-serif";
+      let is=35, ig=22;
+      const iw=(sz,g)=>{ ctx.font="600 "+sz+"px 'Barlow Condensed',sans-serif";
         return info.reduce((t,part)=>t+ctx.measureText(part).width+g,0)-g; };
-      while(iw(is,ig)>maxW && is>18){ is-=1; ig=Math.max(12,ig-1); }
-      ctx.font="500 "+is+"px 'Barlow Condensed',sans-serif";
+      while(iw(is,ig)>maxW && is>20){ is-=1; ig=Math.max(12,ig-1); }
+      ctx.font="600 "+is+"px 'Barlow Condensed',sans-serif";
       let x=M;
       info.forEach(part=>{
-        ctx.fillStyle = part==="·" ? "rgba(255,255,255,.40)" : "rgba(255,255,255,.62)";
+        ctx.fillStyle = part==="·" ? "rgba(255,255,255,.45)" : "rgba(255,255,255,.78)";
         ctx.fillText(part,x,y+10);
         x += ctx.measureText(part).width + ig;
       });
       ls("0px");
-      y += 42;
+      y += 50;
     }
     y += gap;
   });
 
-  drawBottomBand(same?[niceDate(a[1])]:[niceDate(a[1]),"·",niceDate(b[1])]);
+  drawBottomBand(same?[niceDate(a[1])]:[niceDate(a[1]),"·",niceDate(b[1])], null, true);
 }
 
 /* ---- matchday and squad on one graphic ---- */
