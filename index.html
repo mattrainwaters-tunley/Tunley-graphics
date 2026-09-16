@@ -360,11 +360,16 @@ loadSquad();
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
 const W=1080,H=1350,M=64;
 const GREEN="#4CAF72", AMBER="#E8B84B", RED="#E03A3A";
+/* a lighter green for small labels sitting on a photo: the club green is
+   mid-toned and disappears against a bright sky at phone size */
+const GREEN_LIFT="#7FDCA4";
+function labelGreen(){ return photo ? GREEN_LIFT : GREEN; }
 const BAND="#186B40";            // club green, dark enough for white text
 
 /* solid green strip along the bottom, so the fixture details never
    have to fight the photo. returns the y it starts at. */
 function drawBottomBand(parts, second, big){
+  lift(false);
   const bandH = second ? 142 : (big ? 116 : 104);
   const top = H-bandH;
   ctx.fillStyle=BAND; ctx.fillRect(0,top,W,bandH);
@@ -402,6 +407,17 @@ function drawBottomBand(parts, second, big){
 }
 
 function ls(v){ try{ctx.letterSpacing=v;}catch(e){} }
+
+/* Lift text off a photo. Soft and dark rather than an outline, so on a
+   phone the words separate from the picture without looking effected.
+   Never used on the solid green band, which needs no help. */
+function lift(on){
+  if(on && photo){
+    ctx.shadowColor="rgba(0,0,0,.78)"; ctx.shadowBlur=11; ctx.shadowOffsetY=2;
+  }else{
+    ctx.shadowColor="transparent"; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+  }
+}
 
 function wrap(text,size,weight,maxW){
   ctx.font=weight+" "+size+"px 'Barlow Condensed',sans-serif";
@@ -565,6 +581,7 @@ function render(){
   if(state==="off") drawOffBand(250, y-30);
 
   ctx.textBaseline="top";
+  lift(true);
   for(const b of blocks){
     y += (b.gapBefore||0);
     if(b.rule){
@@ -610,6 +627,7 @@ function render(){
     ls("0px");
     y += b.lh + (b.gapAfter||0);
   }
+  lift(false);
 }
 
 /* ---- squad graphic: badge and team name top left, names down the left,
@@ -668,7 +686,7 @@ function renderDouble(){
   const blockH=(f,big)=>{
     const lh=Math.round(big*0.92);
     const body = isFull ? 2*Math.round(big*1.02) : bodyLines(f,big).length*lh;
-    return 42 + 12 + body + (infoFor(f).length?50:0);
+    return 42 + 12 + body + (infoFor(f).length?56:0);
   };
 
   let big = isFull?66:78, gap=58, hA, hB;
@@ -691,10 +709,8 @@ function renderDouble(){
   [a,b].forEach(f=>{
     /* which team */
     ctx.font="700 35px 'Barlow Condensed',sans-serif";
-    ls("11px"); ctx.fillStyle=GREEN;
-    if(photo){ ctx.shadowColor="rgba(0,0,0,.65)"; ctx.shadowBlur=16; ctx.shadowOffsetY=2; }
+    ls("11px"); ctx.fillStyle=labelGreen(); lift(true);
     ctx.fillText(tag(f[0]), M, y);
-    ctx.shadowColor="transparent"; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
     ls("0px");
     y += 54;
 
@@ -728,22 +744,23 @@ function renderDouble(){
     const info=infoFor(f);
     if(info.length){
       ls("3px");
-      let is=35, ig=22;
+      let is=40, ig=24;
       const iw=(sz,g)=>{ ctx.font="600 "+sz+"px 'Barlow Condensed',sans-serif";
         return info.reduce((t,part)=>t+ctx.measureText(part).width+g,0)-g; };
-      while(iw(is,ig)>maxW && is>20){ is-=1; ig=Math.max(12,ig-1); }
+      while(iw(is,ig)>maxW && is>22){ is-=1; ig=Math.max(12,ig-1); }
       ctx.font="600 "+is+"px 'Barlow Condensed',sans-serif";
       let x=M;
       info.forEach(part=>{
-        ctx.fillStyle = part==="·" ? "rgba(255,255,255,.45)" : "rgba(255,255,255,.78)";
+        ctx.fillStyle = part==="·" ? "rgba(255,255,255,.55)" : "rgba(255,255,255,.92)";
         ctx.fillText(part,x,y+10);
         x += ctx.measureText(part).width + ig;
       });
       ls("0px");
-      y += 50;
+      y += 56;
     }
     y += gap;
   });
+  lift(false);
 
   const dates = same?[niceDate(a[1])]:[niceDate(a[1]),"·",niceDate(b[1])];
   drawBottomBand([isFull?"FULL TIME":"MATCHDAY","·"].concat(dates), null, true);
@@ -788,6 +805,7 @@ function renderMatchdaySquad(){
   ctx.fillStyle="#fff";
   ctx.font="700 "+oSize+"px 'Barlow Condensed',sans-serif";
   oLines.forEach((l,i)=>ctx.fillText(l,M,y+i*oLH));
+  lift(false);
   y += oLines.length*oLH;
 
   /* green band along the bottom */
@@ -813,14 +831,14 @@ function renderMatchdaySquad(){
   // pool of empty space above the bottom line
   const listTop = zoneTop + Math.max(0,(avail - rows*rowH)/2);
   ctx.font="600 "+size+"px 'Barlow Condensed',sans-serif";
-  ls("0.6px");
+  ls("0.6px"); lift(true);
   names.forEach((n,i)=>{
     const col=twoCol?Math.floor(i/rows):0;
     const row=twoCol?i%rows:i;
     ctx.fillStyle="#fff";
     ctx.fillText(n.toUpperCase(), M+col*(colW+40), listTop+row*rowH);
   });
-  ls("0px");
+  ls("0px"); lift(false);
 }
 
 function renderSquad(){
@@ -845,12 +863,13 @@ function renderSquad(){
   const stackH=tLines.length*tLH + sGap + sLH;
   let ty = Math.max(bY, bY + (bW - stackH)/2 + 4);
   ctx.fillStyle="#fff"; ls("1.4px");
+  lift(true);
   ctx.font="700 "+tSize+"px 'Barlow Condensed',sans-serif";
   tLines.forEach((l,i)=>ctx.fillText(l,tx,ty+i*tLH));
   ctx.font="600 "+sSize+"px 'Barlow Condensed',sans-serif";
   ctx.fillStyle=GREEN; ls("7px");
   ctx.fillText("SQUAD", tx, ty + tLines.length*tLH + sGap);
-  ls("0px");
+  ls("0px"); lift(false);
   const headerBottom = Math.max(bY+bW, ty+stackH);
 
   /* green band along the bottom: fixture, then the ground under it */
@@ -874,7 +893,7 @@ function renderSquad(){
   }
   const rowH=rowOf(size);
   ctx.font="600 "+size+"px 'Barlow Condensed',sans-serif";
-  ls("0.8px");
+  ls("0.8px"); lift(true);
   names.forEach((n,i)=>{
     const y=listTop+i*rowH;
     const t=n.toUpperCase();
@@ -887,7 +906,7 @@ function renderSquad(){
     const bleed=Math.max(12,Math.round(size*0.40));
     ctx.fillRect(M, y+drop, m.width+bleed, Math.max(1,Math.round(size/34)));
   });
-  ls("0px");
+  ls("0px"); lift(false);
 }
 
 /* ---- wiring ---- */
