@@ -105,11 +105,29 @@
     <button data-state="mdsquad" aria-pressed="false" class="wide">Matchday + squad</button>
   </div>
 
+  <div id="twoWrap" style="display:none">
+    <label style="display:flex;align-items:center;gap:9px;text-transform:none;letter-spacing:0;font-size:16px;color:#cfd6de">
+      <input type="checkbox" id="twoUp" style="width:18px;height:18px;accent-color:#4CAF72">
+      Show two matches on one graphic
+    </label>
+    <div id="fixture2Wrap" style="display:none">
+      <label>Second game</label>
+      <select id="fixture2"></select>
+    </div>
+  </div>
+
   <div id="scoreArea" style="display:none">
     <label>Score</label>
     <div class="row">
       <div><input type="text" id="ts" placeholder="Tunley" inputmode="numeric"></div>
       <div><input type="text" id="os" placeholder="Them" inputmode="numeric"></div>
+    </div>
+    <div id="score2Wrap" style="display:none">
+      <label>Second game score</label>
+      <div class="row">
+        <div><input type="text" id="ts2" placeholder="Tunley" inputmode="numeric"></div>
+        <div><input type="text" id="os2" placeholder="Them" inputmode="numeric"></div>
+      </div>
     </div>
     <div id="scorerWrap">
       <label>Scorers <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
@@ -251,13 +269,17 @@ function currentRow(){
   return (sel.value!=="" && FIXTURES[sel.value]) ? FIXTURES[sel.value] : null;
 }
 
+const sel2=document.getElementById('fixture2');
+const fxLabel=f=>niceDate(f[1])+" — "+f[0]+" v "+f[3]+" ("+f[4]+")";
+
 function fillDropdown(keep){
-  sel.innerHTML="";
+  const keep2 = (sel2.value!=="" && FIXTURES[sel2.value]) ? FIXTURES[sel2.value] : null;
+  sel.innerHTML=""; sel2.innerHTML="";
   FIXTURES.forEach((f,i)=>{
     const o=document.createElement('option');
-    o.value=i;
-    o.textContent=niceDate(f[1])+" — "+f[0]+" v "+f[3]+" ("+f[4]+")";
+    o.value=i; o.textContent=fxLabel(f);
     sel.appendChild(o);
+    sel2.appendChild(o.cloneNode(true));
   });
   // keep the game you were on if it is still in the list,
   // otherwise land on the next one that has not been played yet
@@ -269,6 +291,16 @@ function fillDropdown(keep){
     pick = next>=0 ? next : Math.max(0,FIXTURES.length-1);
   }
   sel.value=pick;
+
+  // second game: keep it if still there, else the next game on the same day
+  let pick2=-1;
+  if(keep2) pick2=FIXTURES.findIndex(f=>f[1]===keep2[1] && f[3]===keep2[3] && f[0]===keep2[0]);
+  if(pick2<0){
+    const day=FIXTURES[pick] ? FIXTURES[pick][1] : null;
+    pick2=FIXTURES.findIndex((f,i)=>i!==pick && day && f[1]===day);
+    if(pick2<0) pick2=Math.min(pick+1,FIXTURES.length-1);
+  }
+  sel2.value=pick2;
 }
 fillDropdown();
 
@@ -455,9 +487,15 @@ function drawOffBand(safeTop,safeBottom){
   ls("0px"); ctx.textAlign="left"; ctx.textBaseline="top";
 }
 
+function twoUpOn(){
+  const c=document.getElementById('twoUp');
+  return c && c.checked && (state==="matchday"||state==="full");
+}
+
 function render(){
   if(state==="xi"){ renderSquad(); return; }
   if(state==="mdsquad"){ renderMatchdaySquad(); return; }
+  if(twoUpOn()){ renderDouble(); return; }
   const f=FIXTURES[sel.value];
   const [team,iso,time,opp,ha,venue]=f;
   const maxW=W-M*2;
@@ -598,6 +636,118 @@ function drawSquadScrim(){
     g.addColorStop(1,"rgba(0,0,0,.40)");
     ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
   }
+}
+
+/* ---- two matches on one graphic ---- */
+function renderDouble(){
+  const a=FIXTURES[sel.value], b=FIXTURES[sel2.value];
+  if(!a||!b) return;
+  const isFull = state==="full";
+  const maxW=W-M*2;
+  const same = a[1]===b[1];
+  const tag=t=> t==="Reserves"?"RESERVES" : t==="U18s"?"U18S" : "FIRSTS";
+
+  const scoresFor=f=> f===a
+    ? [(document.getElementById('ts').value||"0").trim(),(document.getElementById('os').value||"0").trim()]
+    : [(document.getElementById('ts2').value||"0").trim(),(document.getElementById('os2').value||"0").trim()];
+
+  const infoFor=f=>{
+    const parts=[];
+    if(!same) parts.push(niceDate(f[1]));
+    if(!isFull){ parts.push(f[2]); if(f[5]) parts.push(f[5].toUpperCase()); }
+    // dots between the parts, same as the single graphics
+    return parts.flatMap((p,i)=>i?["·",p]:[p]);
+  };
+
+  const bandTop = H-104;
+  const top = 56+150+70;
+  const room = bandTop-40-top;
+
+  const bodyLines=(f,big)=> isFull ? null : wrap("v "+f[3].toUpperCase(), big, 700, maxW);
+  const blockH=(f,big)=>{
+    const lh=Math.round(big*0.92);
+    const body = isFull ? 2*Math.round(big*1.02) : bodyLines(f,big).length*lh;
+    return 34 + 12 + body + (infoFor(f).length?42:0);
+  };
+
+  let big = isFull?66:78, gap=58, hA, hB;
+  while(big>38){
+    hA=blockH(a,big); hB=blockH(b,big);
+    if(hA+gap+hB<=room) break;
+    big-=4;
+  }
+  hA=blockH(a,big); hB=blockH(b,big);
+
+  let y = top + Math.max(0,(room-(hA+gap+hB))/2);
+
+  ctx.clearRect(0,0,W,H);
+  drawPhoto();
+  drawScrim(y-30);
+  if(badge.complete && badge.naturalWidth) ctx.drawImage(badge,M,56,150,150);
+
+  /* state label beside the crest */
+  ctx.textBaseline="top";
+  ctx.font="600 30px 'Barlow Condensed',sans-serif";
+  ls("12.6px"); ctx.fillStyle=GREEN;
+  ctx.fillText(isFull?"FULL TIME":"MATCHDAY", M+150+28, 56+58);
+  ls("0px");
+
+  [a,b].forEach(f=>{
+    /* which team */
+    ctx.font="600 28px 'Barlow Condensed',sans-serif";
+    ls("11px"); ctx.fillStyle=GREEN;
+    ctx.fillText(tag(f[0]), M, y);
+    ls("0px");
+    y += 46;
+
+    if(isFull){
+      const [ts,os]=scoresFor(f);
+      const tn=parseInt(ts)||0, on=parseInt(os)||0;
+      // the green tag above already says which side it is, so just TUNLEY here
+      const rows=[["TUNLEY", ts, tn<on],[f[3].toUpperCase(), os, on<tn]];
+      const lh=Math.round(big*1.02);
+      rows.forEach((r,i)=>{
+        let size=big;
+        ctx.font="700 "+size+"px 'Barlow Condensed',sans-serif";
+        const numW=ctx.measureText(r[1]).width;
+        while(ctx.measureText(r[0]).width > maxW-numW-36 && size>30){
+          size-=2; ctx.font="700 "+size+"px 'Barlow Condensed',sans-serif";
+        }
+        ctx.fillStyle = r[2] ? "rgba(255,255,255,.55)" : "#fff";
+        ctx.fillText(r[0], M, y+i*lh+(big-size));
+        ctx.font="700 "+big+"px 'Barlow Condensed',sans-serif";
+        ctx.textAlign="right"; ctx.fillText(r[1], W-M, y+i*lh); ctx.textAlign="left";
+      });
+      y += 2*lh;
+    }else{
+      const lines=bodyLines(f,big), lh=Math.round(big*0.92);
+      ctx.font="700 "+big+"px 'Barlow Condensed',sans-serif";
+      ctx.fillStyle="#fff";
+      lines.forEach((l,i)=>ctx.fillText(l,M,y+i*lh));
+      y += lines.length*lh;
+    }
+
+    const info=infoFor(f);
+    if(info.length){
+      ls("3px");
+      let is=28, ig=22;
+      const iw=(sz,g)=>{ ctx.font="500 "+sz+"px 'Barlow Condensed',sans-serif";
+        return info.reduce((t,part)=>t+ctx.measureText(part).width+g,0)-g; };
+      while(iw(is,ig)>maxW && is>18){ is-=1; ig=Math.max(12,ig-1); }
+      ctx.font="500 "+is+"px 'Barlow Condensed',sans-serif";
+      let x=M;
+      info.forEach(part=>{
+        ctx.fillStyle = part==="·" ? "rgba(255,255,255,.40)" : "rgba(255,255,255,.62)";
+        ctx.fillText(part,x,y+10);
+        x += ctx.measureText(part).width + ig;
+      });
+      ls("0px");
+      y += 42;
+    }
+    y += gap;
+  });
+
+  drawBottomBand(same?[niceDate(a[1])]:[niceDate(a[1]),"·",niceDate(b[1])]);
 }
 
 /* ---- matchday and squad on one graphic ---- */
@@ -747,6 +897,8 @@ document.querySelectorAll('.states button').forEach(btn=>{
     state=btn.dataset.state;
     document.querySelectorAll('.states button').forEach(b=>b.setAttribute('aria-pressed',b===btn));
     document.getElementById('scoreArea').style.display = (state==="half"||state==="full")?"block":"none";
+    document.getElementById('twoWrap').style.display = (state==="matchday"||state==="full")?"block":"none";
+    syncTwoUp();
     document.getElementById('scorerWrap').style.display = state==="full"?"block":"none";
     document.getElementById('motmArea').style.display = state==="motm"?"block":"none";
     document.getElementById('offArea').style.display = state==="off"?"block":"none";
@@ -754,6 +906,15 @@ document.querySelectorAll('.states button').forEach(btn=>{
     render();
   };
 });
+
+function syncTwoUp(){
+  const on=document.getElementById('twoUp').checked && (state==="matchday"||state==="full");
+  document.getElementById('fixture2Wrap').style.display = on?"block":"none";
+  document.getElementById('score2Wrap').style.display = (on&&state==="full")?"block":"none";
+}
+document.getElementById('twoUp').onchange=()=>{ syncTwoUp(); render(); };
+sel2.onchange=render;
+['ts2','os2'].forEach(id=>document.getElementById(id).oninput=render);
 
 sel.onchange=()=>{
   const t=teamOf();
