@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tunley Athletic — fixture editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:#14161a;color:#e6eaef;
+    font-family:'Barlow Condensed',system-ui,sans-serif;
+    padding:26px 18px 80px;
+  }
+  .wrap{max-width:820px;margin:0 auto}
+  h1{font-size:30px;font-weight:700;letter-spacing:.04em}
+  .sub{font-size:17px;color:#79828d;margin:4px 0 22px}
+
+  label{display:block;font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+        color:#7f8a95;margin:0 0 5px}
+  input,select{
+    width:100%;background:#1e2229;border:1px solid #333a44;color:#e6eaef;
+    border-radius:7px;padding:10px 11px;font-size:17px;
+    font-family:'Barlow Condensed',sans-serif;
+  }
+  input:focus,select:focus{outline:2px solid #4CAF72;outline-offset:1px;border-color:transparent}
+
+  button{
+    background:#4CAF72;color:#06210f;border:0;border-radius:8px;
+    padding:12px 20px;font-size:17px;font-weight:700;letter-spacing:.11em;
+    text-transform:uppercase;cursor:pointer;font-family:inherit;
+  }
+  button:hover{background:#5cc281}
+  button:disabled{background:#2a3138;color:#5d6670;cursor:not-allowed}
+  button.ghost{background:transparent;color:#aeb7c1;border:1px solid #333a44;font-weight:600}
+  button.ghost:hover{background:#1e2229;color:#e6eaef}
+
+  .card{background:#191d23;border:1px solid #262c34;border-radius:11px;padding:16px;margin-bottom:12px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  .grid .full{grid-column:1/-1}
+
+  .tag{display:inline-block;font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+       color:#4CAF72;font-weight:600;margin-bottom:9px}
+  .tag.past{color:#7f8a95}
+
+  .teams{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 18px}
+  .teams button{
+    background:#1e2229;border:1px solid #333a44;color:#aeb7c1;
+    padding:8px 15px;font-size:14px;letter-spacing:.09em;font-weight:600;
+  }
+  .teams button[aria-pressed="true"]{background:#4CAF72;border-color:#4CAF72;color:#06210f}
+
+  .row{display:flex;gap:11px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  .msg{font-size:16px;color:#79828d}
+  .msg.ok{color:#4CAF72}
+  .msg.bad{color:#E0736A}
+  .note{font-size:15px;color:#69727c;line-height:1.55;margin-top:10px}
+  .signin{max-width:400px}
+  .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+
+  @media (max-width:640px){
+    .grid{grid-template-columns:1fr}
+    h1{font-size:25px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Fixture editor</h1>
+  <div class="sub">Change a date, kick off time, opponent or ground. The website, the app and the graphic maker all read from here.</div>
+
+  <div class="msg" id="boot">Starting…</div>
+
+  <!-- signed out -->
+  <div id="signinBox" class="signin" style="display:none">
+    <div class="card">
+      <label>Email</label>
+      <input type="email" id="email" autocomplete="email" inputmode="email" placeholder="you@example.com">
+      <div class="row">
+        <button id="signin">Email me a link</button>
+      </div>
+      <div class="msg" id="signinMsg" style="margin-top:10px"></div>
+      <div class="note">No password. You get a one time link by email that signs you in on this device.
+      Only club admins can change fixtures, everyone else can read them, which is how the website and app work.</div>
+    </div>
+  </div>
+
+  <!-- signed in -->
+  <div id="editor" style="display:none">
+    <div class="bar">
+      <span class="msg" id="who"></span>
+      <button class="ghost" id="signout">Sign out</button>
+    </div>
+
+    <div class="teams" id="teams">
+      <button data-team="all" aria-pressed="true">All</button>
+      <button data-team="Firsts" aria-pressed="false">Firsts</button>
+      <button data-team="Reserves" aria-pressed="false">Reserves</button>
+      <button data-team="U18s" aria-pressed="false">U18s</button>
+      <button data-team="past" aria-pressed="false">Played</button>
+    </div>
+
+    <div id="list"></div>
+    <div class="msg" id="listMsg"></div>
+  </div>
+
+</div>
+
+<script>
+/* No outside libraries. Everything here is plain fetch against Supabase's own
+   web endpoints, so there is nothing to download that can be blocked, and
+   nothing that can hang on our behalf. */
+const SUPABASE_URL="https://gxbvuqtjkpynbhjqggxg.supabase.co";
+const SUPABASE_KEY="sb_publishable_UOFrYxeVOGnMMdCtijIPVA_ZCZ2Q1nt";
+const PAGE_URL=location.href.split('#')[0].split('?')[0];
+const STORE="tunley-fixture-session";
+const TZ="Europe/London";
+
+let session=null, FIXTURES=[], VENUES=[], filter="all";
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function say(el,kind,text){ el.className="msg"+(kind?" "+kind:""); el.textContent=text; }
+function boot(kind,text){ const b=$('boot'); say(b,kind,text); b.style.display=text?"block":"none"; }
+window.addEventListener('error',e=>boot("bad","Something went wrong: "+(e.message||e)));
+
+/* ---- time. Kick offs are stored in UTC, everything here is British time,
+        whatever time zone the person editing is sitting in. ---- */
+function londonParts(iso){
+  const f=new Intl.DateTimeFormat('en-GB',{timeZone:TZ,year:'numeric',month:'2-digit',
+    day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+  const p={}; f.formatToParts(new Date(iso)).forEach(x=>p[x.type]=x.value);
+  return {date:p.year+"-"+p.month+"-"+p.day, time:p.hour+":"+p.minute};
+}
+function londonToUTC(dateStr,timeStr){
+  const [y,m,d]=dateStr.split("-").map(Number);
+  const [hh,mm]=timeStr.split(":").map(Number);
+  const wanted=Date.UTC(y,m-1,d,hh,mm);
+  let t=wanted;
+  for(let i=0;i<2;i++){
+    const p=londonParts(new Date(t).toISOString());
+    const [py,pm,pd]=p.date.split("-").map(Number);
+    const [ph,pmin]=p.time.split(":").map(Number);
+    t += wanted - Date.UTC(py,pm-1,pd,ph,pmin);
+  }
+  return new Date(t).toISOString();
+}
+const DAY=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const MON=["Jan","Feb","Mar","Apr","May","June","July","Aug","Sept","Oct","Nov","Dec"];
+function pretty(dateStr){
+  const [y,m,d]=dateStr.split("-").map(Number);
+  return DAY[new Date(Date.UTC(y,m-1,d,12)).getUTCDay()]+" "+d+" "+MON[m-1]+" "+y;
+}
+
+/* ---- session, kept in this browser ---- */
+function loadSession(){
+  try{ const raw=localStorage.getItem(STORE); return raw?JSON.parse(raw):null; }catch(e){ return null; }
+}
+function saveSession(s){
+  session=s;
+  try{ s?localStorage.setItem(STORE,JSON.stringify(s)):localStorage.removeItem(STORE); }catch(e){}
+}
+function claims(tok){
+  try{
+    const body=tok.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+    return JSON.parse(decodeURIComponent(escape(atob(body))));
+  }catch(e){ return {}; }
+}
+const emailFromToken=tok=>claims(tok).email||"";
+function expired(s){
+  if(!s||!s.access_token) return true;
+  const exp=claims(s.access_token).exp;
+  return exp ? (exp*1000) < Date.now()+30000 : false;
+}
+// the one time link sends the tokens back in the address bar
+function sessionFromUrl(){
+  const h=location.hash.startsWith('#')?location.hash.slice(1):"";
+  if(!h) return null;
+  const q=new URLSearchParams(h);
+  const at=q.get('access_token');
+  if(!at) return null;
+  return {access_token:at, refresh_token:q.get('refresh_token')||"", email:emailFromToken(at)};
+}
+function errorFromUrl(){
+  const h=location.hash.startsWith('#')?location.hash.slice(1):"";
+  const q=new URLSearchParams(h||location.search.slice(1));
+  return q.get('error_description')||q.get('error')||null;
+}
+async function refreshSession(){
+  if(!session||!session.refresh_token) return false;
+  try{
+    const r=await fetch(SUPABASE_URL+"/auth/v1/token?grant_type=refresh_token",{
+      method:"POST",
+      headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({refresh_token:session.refresh_token})
+    });
+    if(!r.ok) return false;
+    const d=await r.json();
+    if(!d.access_token) return false;
+    saveSession({access_token:d.access_token,
+                 refresh_token:d.refresh_token||session.refresh_token,
+                 email:emailFromToken(d.access_token)});
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ---- talking to Supabase ---- */
+function headers(json){
+  const h={apikey:SUPABASE_KEY};
+  if(session&&session.access_token) h.Authorization="Bearer "+session.access_token;
+  if(json) h["Content-Type"]="application/json";
+  return h;
+}
+async function api(path,opts){
+  const r=await fetch(SUPABASE_URL+path,opts);
+  let body=null;
+  try{ body=await r.json(); }catch(e){}
+  if(!r.ok){
+    const m=(body&&(body.message||body.error_description||body.error||body.msg))||("HTTP "+r.status);
+    throw new Error(m);
+  }
+  return body;
+}
+
+/* ---- sign in ---- */
+$('signin').onclick=async()=>{
+  const msg=$('signinMsg'), btn=$('signin');
+  const email=$('email').value.trim();
+  if(!email){ say(msg,"bad","Put your email in first."); return; }
+  say(msg,"","Sending…"); btn.disabled=true;
+  try{
+    await api("/auth/v1/otp?redirect_to="+encodeURIComponent(PAGE_URL),{
+      method:"POST",
+      headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({email, create_user:false})
+    });
+    say(msg,"ok","Link sent. Open the email on this device and tap the link.");
+  }catch(e){
+    say(msg,"bad", /signup|not.*(allowed|found)/i.test(e.message)
+      ? "That email is not set up as a club admin." : e.message);
+  }
+  btn.disabled=false;
+};
+$('email').addEventListener('keydown',e=>{ if(e.key==="Enter") $('signin').click(); });
+$('signout').onclick=()=>{ saveSession(null); show(); };
+
+/* ---- screens ---- */
+function show(){
+  const inEditor=!!(session&&session.access_token);
+  $('signinBox').style.display=inEditor?"none":"block";
+  $('editor').style.display=inEditor?"block":"none";
+  if(inEditor){
+    say($('who'),"","Signed in as "+(session.email||"club admin"));
+    load();
+  }
+}
+
+async function load(){
+  const listMsg=$('listMsg');
+  say(listMsg,"","Loading fixtures…");
+  try{
+    const [mx,vx]=await Promise.all([
+      api("/rest/v1/matches?select=id,team,opponent,match_date,home_away,competition,venue,venue_id,status,tunley_score,opponent_score&order=match_date.asc",{headers:headers()}),
+      api("/rest/v1/venues?select=id,venue_name,postcode&order=venue_name.asc",{headers:headers()})
+    ]);
+    FIXTURES=mx; VENUES=vx;
+    say(listMsg,"","");
+    render();
+  }catch(e){
+    say(listMsg,"bad","Could not load fixtures: "+e.message);
+  }
+}
+
+const isPast=f=>(f.status||"").toLowerCase()==="completed" || new Date(f.match_date)<new Date();
+
+function render(){
+  const rows=FIXTURES.filter(f=>{
+    if(filter==="past") return isPast(f);
+    if(filter==="all")  return !isPast(f);
+    return f.team===filter && !isPast(f);
+  });
+  const list=$('list');
+  if(!rows.length){ list.innerHTML='<div class="msg">Nothing here.</div>'; return; }
+
+  list.innerHTML=rows.map(f=>{
+    const p=londonParts(f.match_date);
+    const venueOpts=['<option value="">No ground set</option>'].concat(
+      VENUES.map(v=>`<option value="${v.id}"${v.id===f.venue_id?' selected':''}>`
+        +esc(v.venue_name)+(v.postcode?" · "+esc(v.postcode):"")+`</option>`)
+    ).join("");
+    const score=(f.tunley_score!=null&&f.opponent_score!=null)?` · ${f.tunley_score}-${f.opponent_score}`:"";
+    return `
+    <div class="card" data-id="${f.id}">
+      <span class="tag${isPast(f)?' past':''}">${esc(f.team)}${score}</span>
+      <div class="grid">
+        <div><label>Date</label><input type="date" class="f-date" value="${p.date}"></div>
+        <div><label>Kick off (British time)</label><input type="time" class="f-time" value="${p.time}"></div>
+        <div class="full"><label>Opponent</label><input type="text" class="f-opp" value="${esc(f.opponent)}"></div>
+        <div>
+          <label>Home or away</label>
+          <select class="f-ha">
+            <option value="Home"${f.home_away==="Home"?" selected":""}>Home</option>
+            <option value="Away"${f.home_away==="Away"?" selected":""}>Away</option>
+          </select>
+        </div>
+        <div><label>Competition</label><input type="text" class="f-comp" value="${esc(f.competition)}"></div>
+        <div class="full"><label>Ground</label><select class="f-venue">${venueOpts}</select></div>
+      </div>
+      <div class="row">
+        <button class="f-save">Save</button>
+        <span class="msg f-msg"></span>
+      </div>
+    </div>`;
+  }).join("");
+
+  list.querySelectorAll('.f-save').forEach(b=>{ b.onclick=()=>save(b.closest('.card')); });
+}
+
+async function save(card){
+  const id=+card.dataset.id;
+  const msg=card.querySelector('.f-msg'), btn=card.querySelector('.f-save');
+  const tell=(kind,text)=>{ msg.className="msg f-msg"+(kind?" "+kind:""); msg.textContent=text; };
+  const date=card.querySelector('.f-date').value;
+  const time=card.querySelector('.f-time').value;
+  const opp =card.querySelector('.f-opp').value.trim();
+  const ha  =card.querySelector('.f-ha').value;
+  const comp=card.querySelector('.f-comp').value.trim();
+  const ven =card.querySelector('.f-venue').value;
+
+  if(!date||!time){ tell("bad","Date and kick off are both needed."); return; }
+  if(!opp){ tell("bad","Opponent cannot be empty."); return; }
+
+  btn.disabled=true; tell("","Saving…");
+  if(expired(session)) await refreshSession();
+  try{
+    const out=await api("/rest/v1/rpc/update_match_details",{
+      method:"POST",
+      headers:headers(true),
+      body:JSON.stringify({
+        p_match_id:id,
+        p_match_date:londonToUTC(date,time),
+        p_opponent:opp,
+        p_home_away:ha,
+        p_competition:comp,
+        p_venue_id: ven===""?null:+ven
+      })
+    });
+    const i=FIXTURES.findIndex(f=>f.id===id);
+    if(i>=0) FIXTURES[i]=Object.assign({},FIXTURES[i],out||{});
+    tell("ok","Saved, "+pretty(date)+" at "+time);
+  }catch(e){
+    tell("bad", /admin access required|JWT|token/i.test(e.message)
+      ? "Your sign in has expired. Sign out and get a fresh link." : e.message);
+  }
+  btn.disabled=false;
+}
+
+document.querySelectorAll('#teams button').forEach(b=>{
+  b.onclick=()=>{
+    filter=b.dataset.team;
+    document.querySelectorAll('#teams button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+    render();
+  };
+});
+
+/* ---- start ---- */
+(function start(){
+  const err=errorFromUrl();
+  const fromLink=sessionFromUrl();
+  if(fromLink){
+    saveSession(fromLink);
+    history.replaceState({},"",PAGE_URL);
+  }else{
+    session=loadSession();
+  }
+  boot("","");
+  if(err) say($('signinMsg'),"bad",decodeURIComponent(String(err).replace(/\+/g," ")));
+  show();
+})();
+</script>
+</body>
+</html>
