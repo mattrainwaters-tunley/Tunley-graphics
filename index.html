@@ -372,14 +372,14 @@ const BAND="#186B40";            // club green, dark enough for white text
    have to fight the photo. returns the y it starts at. */
 function drawBottomBand(parts, second, big){
   lift(false);
-  const bandH = second ? 142 : (big ? 116 : 104);
+  const bandH = second ? 152 : (big ? 132 : 112);
   const top = H-bandH;
   ctx.fillStyle=BAND; ctx.fillRect(0,top,W,bandH);
 
   const maxW=W-M*2;
   ctx.textBaseline="top";
   const wt = big ? "700" : "600";
-  let size = big ? 42 : 34, gap=26;
+  let size = big ? 54 : 40, gap=26;
   const lineW=(sz,g)=>{
     ctx.font=wt+" "+sz+"px 'Barlow Condensed',sans-serif";
     return parts.reduce((t,part)=>t+ctx.measureText(part).width+g,0)-g;
@@ -395,7 +395,7 @@ function drawBottomBand(parts, second, big){
     x += ctx.measureText(part).width + gap;
   });
   if(second){
-    let ss=29;
+    let ss=33;
     const w2=sz=>{ ctx.font="500 "+sz+"px 'Barlow Condensed',sans-serif";
                    return ctx.measureText(second.toUpperCase()).width; };
     ls("2.6px");
@@ -570,7 +570,7 @@ function render(){
   // total height, then draw upward from the bottom
   let total=0;
   blocks.forEach(b=>{ total += (b.gapBefore||0) + (b.rule?2:b.lh) + (b.gapAfter||0); });
-  const bandTop = H-104;
+  const bandTop = H-112;
   let y = bandTop - 42 - total;
 
   // background first, with the wash hugging the block of text
@@ -680,7 +680,7 @@ function renderDouble(){
     return parts.flatMap((p,i)=>i?["·",p]:[p]);
   };
 
-  const bandTop = H-116;
+  const bandTop = H-132;
   const top = 56+150+70;
   const room = bandTop-40-top;
 
