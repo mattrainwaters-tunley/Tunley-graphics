@@ -90,9 +90,11 @@
   <h1>Matchday graphics</h1>
   <div class="sub">Pick a game, drop a photo, type the score.</div>
 
+  <div id="gameWrap">
   <label>Game</label>
   <select id="fixture"></select>
   <div class="hint" id="fixtureNote" style="display:none;margin-top:6px"></div>
+  </div>
 
   <label>Which graphic</label>
   <div class="states">
@@ -103,6 +105,7 @@
     <button data-state="xi" aria-pressed="false">Squad</button>
     <button data-state="off" aria-pressed="false">Match off</button>
     <button data-state="mdsquad" aria-pressed="false" class="wide">Matchday + squad</button>
+    <button data-state="upcoming" aria-pressed="false" class="wide">Upcoming</button>
   </div>
 
   <div id="twoWrap" style="display:none">
@@ -114,6 +117,14 @@
       <label>Second game</label>
       <select id="fixture2"></select>
     </div>
+  </div>
+
+  <div id="upcomingArea" style="display:none">
+    <label>Upcoming matches</label>
+    <div class="hint" style="margin:-4px 0 10px">Filled in automatically with the next game for each side. Change any of them, or set one to none.</div>
+    <select id="up1"></select>
+    <select id="up2" style="margin-top:8px"></select>
+    <select id="up3" style="margin-top:8px"></select>
   </div>
 
   <div id="scoreArea" style="display:none">
@@ -303,6 +314,8 @@ function fillDropdown(keep){
     if(pick2<0) pick2=Math.min(pick+1,FIXTURES.length-1);
   }
   sel2.value=pick2;
+
+  try{ fillUpcoming(); }catch(e){}
 }
 fillDropdown();
 
@@ -514,6 +527,7 @@ function twoUpOn(){
 function render(){
   if(state==="xi"){ renderSquad(); return; }
   if(state==="mdsquad"){ renderMatchdaySquad(); return; }
+  if(state==="upcoming"){ renderUpcoming(); return; }
   if(twoUpOn()){ renderDouble(); return; }
   const f=FIXTURES[sel.value];
   const [team,iso,time,opp,ha,venue]=f;
@@ -660,6 +674,136 @@ function drawSquadScrim(){
 }
 
 /* ---- two matches on one graphic ---- */
+/* ---- upcoming: one, two or three sides on one graphic ---- */
+const UP_IDS=["up1","up2","up3"], UP_TEAMS=["Firsts","Reserves","U18s"];
+
+function upcomingRows(){
+  const out=[];
+  UP_IDS.forEach(id=>{
+    const s=document.getElementById(id);
+    if(s && s.value!=="" && FIXTURES[s.value]) out.push(FIXTURES[s.value]);
+  });
+  return out;
+}
+
+/* fills each slot with that side's next game, but never overwrites
+   a slot you have set yourself */
+function fillUpcoming(){
+  const today=new Date(); today.setHours(0,0,0,0);
+  UP_IDS.forEach((id,n)=>{
+    const s=document.getElementById(id);
+    if(!s) return;
+    const keep=(s.value!=="" && FIXTURES[s.value]) ? FIXTURES[s.value] : null;
+    const mine=s.dataset.touched==="1";
+    s.innerHTML="";
+    const none=document.createElement("option");
+    none.value=""; none.textContent="\u2014 none \u2014";
+    s.appendChild(none);
+    FIXTURES.forEach((f,i)=>{
+      const o=document.createElement("option");
+      o.value=i; o.textContent=fxLabel(f);
+      s.appendChild(o);
+    });
+    let pick="";
+    if(mine && keep){
+      const j=FIXTURES.findIndex(f=>f[1]===keep[1]&&f[3]===keep[3]&&f[0]===keep[0]);
+      if(j>=0) pick=j;
+    }
+    if(pick===""){
+      const j=FIXTURES.findIndex(f=>f[0]===UP_TEAMS[n] && new Date(f[1]+"T12:00:00")>=today);
+      if(j>=0) pick=j;
+    }
+    s.value=pick;
+  });
+}
+
+function renderUpcoming(){
+  const rows=upcomingRows();
+  const maxW=W-M*2;
+  const tag=t=> t==="Reserves"?"RESERVES" : t==="U18s"?"U18S" : "FIRSTS";
+
+  ctx.clearRect(0,0,W,H);
+
+  if(!rows.length){
+    drawPhoto(); drawScrim(H*0.62);
+    if(badge.complete && badge.naturalWidth) ctx.drawImage(badge,M,56,150,150);
+    ctx.textBaseline="top";
+    ctx.font="700 60px 'Barlow Condensed',sans-serif";
+    ctx.fillStyle="rgba(255,255,255,.72)";
+    ctx.fillText("PICK A FIXTURE", M, Math.round(H*0.52));
+    drawBottomBand(["UPCOMING"], null, true);
+    return;
+  }
+
+  const same = rows.every(f=>f[1]===rows[0][1]);
+  const infoFor=f=>{
+    const parts=[];
+    if(!same) parts.push(niceDate(f[1]));
+    parts.push(f[2]);
+    if(f[5]) parts.push(f[5].toUpperCase());
+    return parts.flatMap((p,i)=>i?["\u00b7",p]:[p]);
+  };
+
+  const bandTop=H-132, top=56+150+70, room=bandTop-40-top;
+  const bodyLines=(f,big)=>wrap("v "+f[3].toUpperCase(), big, 700, maxW);
+  const blockH=(f,big)=>{
+    const lh=Math.round(big*0.92);
+    return 64 + bodyLines(f,big).length*lh + (infoFor(f).length?56:0);
+  };
+
+  let big = rows.length>=3 ? 62 : rows.length===2 ? 78 : 100;
+  const gap = rows.length>=3 ? 40 : 58;
+  const totalAt=b=>rows.reduce((t,f)=>t+blockH(f,b),0)+gap*(rows.length-1);
+  while(big>30 && totalAt(big)>room) big-=4;
+  const total=totalAt(big);
+
+  let y = top + Math.max(0,(room-total)/2);
+  try{ window.__upTop = y; if(window.__placeGuide) window.__placeGuide(); }catch(e){}
+
+  drawPhoto();
+  drawScrim(y-30);
+  if(badge.complete && badge.naturalWidth) ctx.drawImage(badge,M,56,150,150);
+  ctx.textBaseline="top";
+
+  rows.forEach(f=>{
+    ctx.font="700 44px 'Barlow Condensed',sans-serif";
+    ls("8px"); ctx.fillStyle=labelGreen();
+    if(photo){ ctx.shadowColor="rgba(0,0,0,.85)"; ctx.shadowBlur=12; ctx.shadowOffsetY=2; }
+    ctx.fillText(tag(f[0]), M, y);
+    ctx.fillText(tag(f[0]), M, y);
+    lift(false); ls("0px");
+    y += 64;
+
+    const lines=bodyLines(f,big), lh=Math.round(big*0.92);
+    ctx.font="700 "+big+"px 'Barlow Condensed',sans-serif";
+    ctx.fillStyle="#fff";
+    lines.forEach((l,i)=>ctx.fillText(l,M,y+i*lh));
+    y += lines.length*lh;
+
+    const info=infoFor(f);
+    if(info.length){
+      ls("3px");
+      let is=38, ig=22;
+      const iw=(sz,g)=>{ ctx.font="600 "+sz+"px 'Barlow Condensed',sans-serif";
+        return info.reduce((t,part)=>t+ctx.measureText(part).width+g,0)-g; };
+      while(iw(is,ig)>maxW && is>20){ is-=1; ig=Math.max(12,ig-1); }
+      ctx.font="600 "+is+"px 'Barlow Condensed',sans-serif";
+      let x=M;
+      info.forEach(part=>{
+        ctx.fillStyle = part==="\u00b7" ? "rgba(255,255,255,.55)" : "rgba(255,255,255,.92)";
+        ctx.fillText(part,x,y+10);
+        x += ctx.measureText(part).width + ig;
+      });
+      ls("0px");
+      y += 56;
+    }
+    y += gap;
+  });
+  lift(false);
+
+  drawBottomBand(same ? ["UPCOMING","\u00b7",niceDate(rows[0][1])] : ["UPCOMING"], null, true);
+}
+
 function renderDouble(){
   const a=FIXTURES[sel.value], b=FIXTURES[sel2.value];
   if(!a||!b) return;
@@ -928,6 +1072,8 @@ document.querySelectorAll('.states button').forEach(btn=>{
     document.getElementById('motmArea').style.display = state==="motm"?"block":"none";
     document.getElementById('offArea').style.display = state==="off"?"block":"none";
     document.getElementById('xiArea').style.display = (state==="xi"||state==="mdsquad")?"block":"none";
+    document.getElementById('upcomingArea').style.display = state==="upcoming"?"block":"none";
+    document.getElementById('gameWrap').style.display = state==="upcoming"?"none":"block";
     render();
   };
 });
@@ -939,6 +1085,11 @@ function syncTwoUp(){
 }
 document.getElementById('twoUp').onchange=()=>{ syncTwoUp(); render(); };
 sel2.onchange=render;
+UP_IDS.forEach(id=>{
+  const s=document.getElementById(id);
+  if(s) s.onchange=()=>{ s.dataset.touched="1"; render(); };
+});
+try{ fillUpcoming(); }catch(e){}
 ['ts2','os2'].forEach(id=>document.getElementById(id).oninput=render);
 
 sel.onchange=()=>{
@@ -1057,12 +1208,22 @@ loadFixtures();
   }
 
   function place(){
-    var rows = TOPS[currentState()];
-    if(!rows){ g.style.display = "none"; return; }
-    var two = document.getElementById("twoUp");
-    g.style.top = (rows[two && two.checked ? 1 : 0] / 1350 * 100) + "%";
+    var st = currentState(), y = null;
+    /* the upcoming graphic centres its text, so it reports its own top */
+    if(st === "upcoming"){
+      if(typeof window.__upTop === "number") y = window.__upTop;
+    }else{
+      var rows = TOPS[st];
+      if(rows){
+        var two = document.getElementById("twoUp");
+        y = rows[two && two.checked ? 1 : 0];
+      }
+    }
+    if(y === null){ g.style.display = "none"; return; }
+    g.style.top = (y / 1350 * 100) + "%";
     g.style.display = "block";
   }
+  window.__placeGuide = place;
 
   for(var i=0;i<btns.length;i++){
     btns[i].addEventListener("click", function(){ setTimeout(place, 0); });
