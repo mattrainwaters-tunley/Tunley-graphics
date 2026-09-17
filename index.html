@@ -1022,5 +1022,61 @@ badge.onload=render;
 render();
 loadFixtures();
 </script>
+
+
+<!-- ===== face guide (added 2026-09-17): shows where the text will land.
+     Preview only, it is an HTML overlay and never appears in the saved PNG. ===== -->
+<script>
+(function(){
+  if(document.getElementById("faceGuide")) return;
+  var cv   = document.getElementById("cv");
+  var wrap = document.createElement("div");
+  wrap.style.cssText = "position:relative;display:inline-block;line-height:0";
+  cv.parentElement.insertBefore(wrap, cv);
+  wrap.appendChild(cv);
+
+  var g = document.createElement("div");
+  g.id = "faceGuide";
+  g.style.cssText = "position:absolute;left:0;right:0;pointer-events:none;display:none;border-top:2px dashed rgba(255,255,255,.55)";
+
+  var lab = document.createElement("span");
+  lab.textContent = "keep the face above this line";
+  lab.style.cssText = "position:absolute;left:10px;top:6px;font:11px/1 -apple-system,system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.8);text-shadow:0 1px 4px rgba(0,0,0,.9);white-space:nowrap";
+  g.appendChild(lab);
+  wrap.appendChild(g);
+
+  /* first row of text on the 1350px canvas: [single fixture, double fixture] */
+  var TOPS = { matchday:[938,580], full:[996,572] };
+  var btns = document.querySelectorAll("[data-state]");
+
+  function currentState(){
+    for(var i=0;i<btns.length;i++){
+      if(btns[i].getAttribute("aria-pressed") === "true") return btns[i].getAttribute("data-state");
+    }
+    return null;
+  }
+
+  function place(){
+    var rows = TOPS[currentState()];
+    if(!rows){ g.style.display = "none"; return; }
+    var two = document.getElementById("twoUp");
+    g.style.top = (rows[two && two.checked ? 1 : 0] / 1350 * 100) + "%";
+    g.style.display = "block";
+  }
+
+  for(var i=0;i<btns.length;i++){
+    btns[i].addEventListener("click", function(){ setTimeout(place, 0); });
+  }
+  var tu = document.getElementById("twoUp");
+  if(tu) tu.addEventListener("change", place);
+
+  /* also runs the matchday handler once at startup, so the
+     Show two matches on one graphic checkbox appears without a click */
+  for(var j=0;j<btns.length;j++){
+    if(btns[j].getAttribute("data-state") === "matchday") btns[j].click();
+  }
+  place();
+})();
+</script>
 </body>
 </html>
