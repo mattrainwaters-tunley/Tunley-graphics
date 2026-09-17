@@ -21,7 +21,7 @@
   .panel{width:380px;flex:none}
   label{display:block;font-size:14px;letter-spacing:.14em;text-transform:uppercase;
         color:#7f8a95;margin:16px 0 6px}
-  select,input[type=text],textarea{
+  select,input[type=text],input[type=date],textarea{
     width:100%;background:#1e2229;border:1px solid #333a44;color:#e6eaef;
     border-radius:7px;padding:10px 11px;font-size:17px;
     font-family:'Barlow Condensed',sans-serif;
@@ -78,7 +78,7 @@
     .panel{order:2;width:100%}
     h1{font-size:22px}
     .sub{margin-bottom:14px}
-    select,input[type=text],textarea{font-size:16px;padding:12px}
+    select,input[type=text],input[type=date],textarea{font-size:16px;padding:12px}
     textarea{min-height:150px}
     .dl{padding:17px;font-size:20px}
   }
@@ -125,6 +125,31 @@
     <select id="up1"></select>
     <select id="up2" style="margin-top:8px"></select>
     <select id="up3" style="margin-top:8px"></select>
+  </div>
+
+  <div id="adjustWrap">
+    <label style="display:flex;align-items:center;gap:9px;text-transform:none;letter-spacing:0;font-size:16px;color:#cfd6de">
+      <input type="checkbox" id="adjustOn" style="width:18px;height:18px;accent-color:#4CAF72">
+      Adjust details just for this graphic
+    </label>
+    <div id="adjustArea" style="display:none">
+      <div class="hint" style="margin:4px 0 12px">Blank uses the fixture. Anything you type changes this graphic only, not the website or the app. Cleared when you pick a different game.</div>
+      <div id="ovTargetWrap" style="display:none;margin-bottom:10px">
+        <label>Which fixture</label>
+        <select id="ovTarget"></select>
+      </div>
+      <div class="row">
+        <div><input type="text" id="ovOpp" placeholder="Opponent"></div>
+        <div><input type="text" id="ovVenue" placeholder="Ground"></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div><input type="date" id="ovDate"></div>
+        <div><input type="text" id="ovTime" placeholder="Kick off 14:00"></div>
+        <div><select id="ovHA"><option value="">Home or away</option><option value="H">Home</option><option value="A">Away</option></select></div>
+      </div>
+      <div class="hint" id="ovNote" style="color:#7FDCA4"></div>
+      <button id="ovReset" style="margin-top:10px;background:none;border:1px solid #2a3139;color:#cfd6de;border-radius:10px;padding:10px 14px;font:inherit;cursor:pointer">Reset adjustments</button>
+    </div>
   </div>
 
   <div id="scoreArea" style="display:none">
@@ -529,7 +554,7 @@ function render(){
   if(state==="mdsquad"){ renderMatchdaySquad(); return; }
   if(state==="upcoming"){ renderUpcoming(); return; }
   if(twoUpOn()){ renderDouble(); return; }
-  const f=FIXTURES[sel.value];
+  const f=applyOv(FIXTURES[sel.value],0);
   const [team,iso,time,opp,ha,venue]=f;
   const maxW=W-M*2;
   const blocks=[];   // {text,size,weight,color,lh,spacing,right}
@@ -674,14 +699,117 @@ function drawSquadScrim(){
 }
 
 /* ---- two matches on one graphic ---- */
+/* ---- per graphic adjustments -------------------------------------
+   Blank fields use the fixture. Anything typed here changes the graphic
+   only, never the database, and clears when you pick a different game. */
+const OV=[{},{},{}];
+const OV_TEXT=[["ovOpp","opp"],["ovVenue","venue"],["ovDate","date"],["ovTime","time"]];
+const OV_NAMES={opp:"opponent",venue:"ground",date:"date",time:"kick off",ha:"home or away"};
+
+function adjustOn(){ const c=document.getElementById("adjustOn"); return !!(c&&c.checked); }
+
+function applyOv(f,i){
+  if(!f || !adjustOn()) return f;
+  const o=OV[i]||{};
+  if(!Object.keys(o).length) return f;
+  const g=f.slice();
+  if(o.opp)   g[3]=o.opp;
+  if(o.date)  g[1]=o.date;
+  if(o.time)  g[2]=o.time;
+  if(o.ha)    g[4]=o.ha;
+  if(o.venue) g[5]=o.venue;
+  return g;
+}
+
+/* the fixtures on the graphic right now, in the order they are drawn */
+function ovSlots(){
+  if(state==="upcoming"){
+    return UP_IDS.map((id,i)=>{
+      const s=document.getElementById(id);
+      const f=(s && s.value!=="" && FIXTURES[s.value]) ? FIXTURES[s.value] : null;
+      return f ? {i:i,label:f[0]+" v "+f[3]} : null;
+    }).filter(Boolean);
+  }
+  const out=[], a=FIXTURES[sel.value];
+  if(a) out.push({i:0,label:a[0]+" v "+a[3]});
+  if(twoUpOn()){
+    const b=FIXTURES[sel2.value];
+    if(b) out.push({i:1,label:b[0]+" v "+b[3]});
+  }
+  return out;
+}
+
+function ovTargetIndex(){
+  const t=document.getElementById("ovTarget");
+  return (t && t.value!=="") ? +t.value : 0;
+}
+
+function syncOvTargets(){
+  const t=document.getElementById("ovTarget");
+  if(!t) return;
+  const slots=ovSlots(), had=t.value;
+  t.innerHTML="";
+  slots.forEach(s=>{
+    const o=document.createElement("option");
+    o.value=s.i; o.textContent=s.label;
+    t.appendChild(o);
+  });
+  t.value = slots.some(s=>String(s.i)===had) ? had : (slots[0]?String(slots[0].i):"");
+  const w=document.getElementById("ovTargetWrap");
+  if(w) w.style.display = slots.length>1 ? "block" : "none";
+  ovToFields();
+}
+
+function ovToFields(){
+  const o=OV[ovTargetIndex()]||{};
+  OV_TEXT.forEach(p=>{
+    const e=document.getElementById(p[0]);
+    if(e){ e.value=o[p[1]]||""; e.style.borderColor = o[p[1]] ? "#4CAF72" : ""; }
+  });
+  const ha=document.getElementById("ovHA");
+  if(ha){ ha.value=o.ha||""; ha.style.borderColor = o.ha ? "#4CAF72" : ""; }
+  ovNote();
+}
+
+function ovFromFields(){
+  const o={};
+  OV_TEXT.forEach(p=>{
+    const e=document.getElementById(p[0]);
+    const v=e ? e.value.trim() : "";
+    if(v) o[p[1]]=v;
+  });
+  const ha=document.getElementById("ovHA");
+  if(ha && ha.value) o.ha=ha.value;
+  OV[ovTargetIndex()]=o;
+  ovToFields();
+}
+
+function ovNote(){
+  const n=document.getElementById("ovNote");
+  if(!n) return;
+  const on=OV.map((o,i)=>Object.keys(o).length?i:-1).filter(i=>i>=0);
+  if(!adjustOn() || !on.length){ n.textContent=""; return; }
+  const parts=on.map(i=>{
+    const keys=Object.keys(OV[i]).map(k=>OV_NAMES[k]||k).join(", ");
+    return (on.length>1 ? "fixture "+(i+1)+": " : "")+keys;
+  });
+  n.textContent="Changed on the graphic only: "+parts.join("  /  ");
+}
+
+function ovClear(i){
+  if(i===undefined){ OV[0]={}; OV[1]={}; OV[2]={}; }
+  else OV[i]={};
+  ovToFields();
+}
+
 /* ---- upcoming: one, two or three sides on one graphic ---- */
 const UP_IDS=["up1","up2","up3"], UP_TEAMS=["Firsts","Reserves","U18s"];
 
 function upcomingRows(){
   const out=[];
-  UP_IDS.forEach(id=>{
+  UP_IDS.forEach((id,i)=>{
     const s=document.getElementById(id);
-    if(s && s.value!=="" && FIXTURES[s.value]) out.push(FIXTURES[s.value]);
+    if(s && s.value!=="" && FIXTURES[s.value]) out.push(applyOv(FIXTURES[s.value],i));
   });
   return out;
 }
@@ -805,7 +933,7 @@ function renderUpcoming(){
 }
 
 function renderDouble(){
-  const a=FIXTURES[sel.value], b=FIXTURES[sel2.value];
+  const a=applyOv(FIXTURES[sel.value],0), b=applyOv(FIXTURES[sel2.value],1);
   if(!a||!b) return;
   const isFull = state==="full";
   const maxW=W-M*2;
@@ -919,7 +1047,7 @@ function renderDouble(){
 
 /* ---- matchday and squad on one graphic ---- */
 function renderMatchdaySquad(){
-  const f=FIXTURES[sel.value];
+  const f=applyOv(FIXTURES[sel.value],0);
   const [team,iso,time,opp,ha,venue]=f;
   const maxW=W-M*2, us=teamNames(team);
 
@@ -993,7 +1121,7 @@ function renderMatchdaySquad(){
 }
 
 function renderSquad(){
-  const f=FIXTURES[sel.value];
+  const f=applyOv(FIXTURES[sel.value],0);
   const [team,iso,time,opp,ha,venue]=f;
   const maxW=W-M*2;
 
@@ -1074,6 +1202,7 @@ document.querySelectorAll('.states button').forEach(btn=>{
     document.getElementById('xiArea').style.display = (state==="xi"||state==="mdsquad")?"block":"none";
     document.getElementById('upcomingArea').style.display = state==="upcoming"?"block":"none";
     document.getElementById('gameWrap').style.display = state==="upcoming"?"none":"block";
+    syncOvTargets();
     render();
   };
 });
@@ -1083,18 +1212,33 @@ function syncTwoUp(){
   document.getElementById('fixture2Wrap').style.display = on?"block":"none";
   document.getElementById('score2Wrap').style.display = (on&&state==="full")?"block":"none";
 }
-document.getElementById('twoUp').onchange=()=>{ syncTwoUp(); render(); };
-sel2.onchange=render;
-UP_IDS.forEach(id=>{
+document.getElementById('twoUp').onchange=()=>{ syncTwoUp(); syncOvTargets(); render(); };
+sel2.onchange=()=>{ ovClear(1); syncOvTargets(); render(); };
+UP_IDS.forEach((id,i)=>{
   const s=document.getElementById(id);
-  if(s) s.onchange=()=>{ s.dataset.touched="1"; render(); };
+  if(s) s.onchange=()=>{ s.dataset.touched="1"; ovClear(i); syncOvTargets(); render(); };
 });
 try{ fillUpcoming(); }catch(e){}
+
+/* adjustments panel */
+document.getElementById('adjustOn').onchange=()=>{
+  document.getElementById('adjustArea').style.display = adjustOn()?"block":"none";
+  syncOvTargets(); render();
+};
+OV_TEXT.forEach(p=>{
+  const e=document.getElementById(p[0]);
+  if(e) e.oninput=()=>{ ovFromFields(); render(); };
+});
+document.getElementById('ovHA').onchange=()=>{ ovFromFields(); render(); };
+document.getElementById('ovTarget').onchange=ovToFields;
+document.getElementById('ovReset').onclick=()=>{ ovClear(); render(); };
+try{ syncOvTargets(); }catch(e){}
 ['ts2','os2'].forEach(id=>document.getElementById(id).oninput=render);
 
 sel.onchange=()=>{
   const t=teamOf();
   if(t!==lastTeam){ lastTeam=t; loadSquad(); }
+  ovClear(0); syncOvTargets();
   render();
 };
 squadBox.oninput=()=>{ saveSquad(); render(); };
@@ -1147,7 +1291,7 @@ document.getElementById('shade').value=Math.round(shade*100);
 document.getElementById('vig').value=Math.round(vignette*100);
 
 document.getElementById('dl').onclick=()=>{
-  const f=FIXTURES[sel.value];
+  const f=applyOv(FIXTURES[sel.value],0);
   const name="tunley-"+f[1]+"-"+(state==="xi"?"squad":state)+".png";
   cv.toBlob(async blob=>{
     if(!blob) return;
