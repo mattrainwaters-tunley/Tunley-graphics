@@ -44,6 +44,9 @@
   .tag{display:inline-block;font-size:13px;letter-spacing:.14em;text-transform:uppercase;
        color:#4CAF72;font-weight:600;margin-bottom:9px}
   .tag.past{color:#7f8a95}
+  .flag{display:inline-block;margin-left:8px;font-size:12px;letter-spacing:.12em;font-weight:700;color:#fff;background:#C0463B;border-radius:4px;padding:1px 7px;vertical-align:1px}
+  .flag.cancelled{background:#6b7480}
+  .f-hint{font-size:14px;color:#E0B54A;margin-top:6px;display:none}
 
   .teams{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 18px}
   .teams button{
@@ -70,7 +73,7 @@
 <div class="wrap">
 
   <h1>Fixture editor</h1>
-  <div class="sub">Change a date, kick off time, opponent or ground. The website, the app and the graphic maker all read from here.</div>
+  <div class="sub">Change a date, kick off time, opponent, ground or status. The website, the app and the graphic maker all read from here.</div>
 
   <div class="msg" id="boot">Starting…</div>
 
@@ -274,7 +277,8 @@ async function load(){
   }
 }
 
-const isPast=f=>(f.status||"").toLowerCase()==="completed" || new Date(f.match_date)<new Date();
+const isOffStatus=f=>/^(postponed|cancelled)$/i.test(f.status||"");
+const isPast=f=>(f.status||"").toLowerCase()==="completed" || (!isOffStatus(f) && new Date(f.match_date)<new Date());
 
 function render(){
   const rows=FIXTURES.filter(f=>{
@@ -292,9 +296,14 @@ function render(){
         +esc(v.venue_name)+(v.postcode?" · "+esc(v.postcode):"")+`</option>`)
     ).join("");
     const score=(f.tunley_score!=null&&f.opponent_score!=null)?` · ${f.tunley_score}-${f.opponent_score}`:"";
+    const st=f.status||"Upcoming";
+    const stList=["Upcoming","Postponed","Cancelled"].concat(st==="Completed"?["Completed"]:[]);
+    const stLabel={Upcoming:"On (upcoming)",Postponed:"Postponed",Cancelled:"Cancelled",Completed:"Played"};
+    const stOpts=stList.map(v=>`<option value="${v}"${v===st?" selected":""}>${stLabel[v]}</option>`).join("");
+    const flag=/^(Postponed|Cancelled)$/.test(st)?`<span class="flag ${st.toLowerCase()}">${st.toUpperCase()}</span>`:"";
     return `
     <div class="card" data-id="${f.id}">
-      <span class="tag${isPast(f)?' past':''}">${esc(f.team)}${score}</span>
+      <span class="tag${isPast(f)?' past':''}">${esc(f.team)}${score}</span>${flag}
       <div class="grid">
         <div><label>Date</label><input type="date" class="f-date" value="${p.date}"></div>
         <div><label>Kick off (British time)</label><input type="time" class="f-time" value="${p.time}"></div>
@@ -308,6 +317,11 @@ function render(){
         </div>
         <div><label>Competition</label><input type="text" class="f-comp" value="${esc(f.competition)}"></div>
         <div class="full"><label>Ground</label><select class="f-venue">${venueOpts}</select></div>
+        <div class="full">
+          <label>Status</label>
+          <select class="f-status" data-was="${st}">${stOpts}</select>
+          <div class="f-hint">New date, so this is set back to On. Change it if the game is still off.</div>
+        </div>
       </div>
       <div class="row">
         <button class="f-save">Save</button>
@@ -317,6 +331,12 @@ function render(){
   }).join("");
 
   list.querySelectorAll('.f-save').forEach(b=>{ b.onclick=()=>save(b.closest('.card')); });
+  list.querySelectorAll('.f-date').forEach(inp=>{
+    inp.addEventListener('change',()=>{
+      const card=inp.closest('.card'), sel=card.querySelector('.f-status');
+      if(sel.value==="Postponed"){ sel.value="Upcoming"; card.querySelector('.f-hint').style.display="block"; }
+    });
+  });
 }
 
 async function save(card){
@@ -329,6 +349,7 @@ async function save(card){
   const ha  =card.querySelector('.f-ha').value;
   const comp=card.querySelector('.f-comp').value.trim();
   const ven =card.querySelector('.f-venue').value;
+  const status=card.querySelector('.f-status').value;
 
   if(!date||!time){ tell("bad","Date and kick off are both needed."); return; }
   if(!opp){ tell("bad","Opponent cannot be empty."); return; }
@@ -345,12 +366,16 @@ async function save(card){
         p_opponent:opp,
         p_home_away:ha,
         p_competition:comp,
-        p_venue_id: ven===""?null:+ven
+        p_venue_id: ven===""?null:+ven,
+        p_status: status
       })
     });
     const i=FIXTURES.findIndex(f=>f.id===id);
     if(i>=0) FIXTURES[i]=Object.assign({},FIXTURES[i],out||{});
-    tell("ok","Saved, "+pretty(date)+" at "+time);
+    tell("ok","Saved, "+pretty(date)+" at "+time+(status!=="Upcoming"&&status!=="Completed"?" ("+status.toLowerCase()+")":""));
+    const oldFlag=card.querySelector('.flag'); if(oldFlag) oldFlag.remove();
+    if(status==="Postponed"||status==="Cancelled") card.querySelector('.tag').insertAdjacentHTML('afterend',`<span class="flag ${status.toLowerCase()}">${status.toUpperCase()}</span>`);
+    card.querySelector('.f-hint').style.display="none";
   }catch(e){
     tell("bad", /admin access required|JWT|token/i.test(e.message)
       ? "Your sign in has expired. Sign out and get a fresh link." : e.message);
