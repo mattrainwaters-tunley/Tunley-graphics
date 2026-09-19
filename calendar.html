@@ -216,7 +216,8 @@ function compCode(m){
 const isHome=m=>/^h/i.test(m.home_away||'');
 const played=m=>m.tunley_score!=null&&m.opponent_score!=null;
 const isOff=m=>/postpon|cancel|abandon|void/i.test(m.status||'');
-function result(m){ if(!played(m)) return null; return m.tunley_score>m.opponent_score?'W':m.tunley_score<m.opponent_score?'L':'D'; }
+const pens=m=>played(m)&&m.tunley_score===m.opponent_score&&m.tunley_pens!=null&&m.opponent_pens!=null&&m.tunley_pens!==m.opponent_pens;
+function result(m){ if(!played(m)) return null; if(pens(m)) return m.tunley_pens>m.opponent_pens?'W':'L'; return m.tunley_score>m.opponent_score?'W':m.tunley_score<m.opponent_score?'L':'D'; }
 
 function scorerLine(m){
   const g=(m.goals||[]).slice().sort((a,b)=>(a.minute??999)-(b.minute??999));
@@ -236,7 +237,7 @@ function fixtureHTML(m){
   const r=result(m);
   let meta;
   if(isOff(m)) meta=`<span class="pp">${esc((m.status||'').toUpperCase())}</span><span>|</span><span>${compCode(m)}</span>`;
-  else if(r) meta=`<span class="res ${r}">${r} ${m.tunley_score}-${m.opponent_score}</span><span>${p.wd}</span><span>|</span><span>${compCode(m)}</span>`;
+  else if(r) meta=`<span class="res ${r}">${r} ${m.tunley_score}-${m.opponent_score}${pens(m)?` (${m.tunley_pens}-${m.opponent_pens} pens)`:''}</span><span>${p.wd}</span><span>|</span><span>${compCode(m)}</span>`;
   else meta=`<span>${p.wd} ${p.time}</span><span>|</span><span>${compCode(m)}</span>`;
   const sc=r?scorerLine(m):'';
   return `<div class="fx">
@@ -329,7 +330,7 @@ function renderSide(matches){
 
 async function load(){
   const from=`${SEASON}-07-01T00:00:00Z`, to=`${SEASON+1}-07-01T00:00:00Z`;
-  const url=`${SUPABASE_URL}/rest/v1/matches?select=id,team,opponent,match_date,home_away,competition,status,tunley_score,opponent_score,goals(minute,players(name))`
+  const url=`${SUPABASE_URL}/rest/v1/matches?select=id,team,opponent,match_date,home_away,competition,status,tunley_score,opponent_score,tunley_pens,opponent_pens,goals(minute,players(name))`
     +`&match_date=gte.${from}&match_date=lt.${to}&order=match_date.asc`;
   try{
     const r=await fetch(url,{headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`}});
