@@ -158,11 +158,25 @@
       <div><input type="text" id="ts" placeholder="Tunley" inputmode="numeric"></div>
       <div><input type="text" id="os" placeholder="Them" inputmode="numeric"></div>
     </div>
+    <div class="penWrap" style="display:none">
+      <label>Penalties <span style="text-transform:none;letter-spacing:0">(only if it went to pens)</span></label>
+      <div class="row">
+        <div><input type="text" id="tp" placeholder="Tunley" inputmode="numeric"></div>
+        <div><input type="text" id="op" placeholder="Them" inputmode="numeric"></div>
+      </div>
+    </div>
     <div id="score2Wrap" style="display:none">
       <label>Second game score</label>
       <div class="row">
         <div><input type="text" id="ts2" placeholder="Tunley" inputmode="numeric"></div>
         <div><input type="text" id="os2" placeholder="Them" inputmode="numeric"></div>
+      </div>
+      <div class="penWrap" style="display:none">
+        <label>Second game penalties <span style="text-transform:none;letter-spacing:0">(only if it went to pens)</span></label>
+        <div class="row">
+          <div><input type="text" id="tp2" placeholder="Tunley" inputmode="numeric"></div>
+          <div><input type="text" id="op2" placeholder="Them" inputmode="numeric"></div>
+        </div>
       </div>
     </div>
     <div id="scorerWrap">
@@ -579,10 +593,13 @@ function render(){
     const ts=(document.getElementById('ts').value||"0").trim();
     const os=(document.getElementById('os').value||"0").trim();
     const tn=parseInt(ts)||0, on=parseInt(os)||0;
-    const dimT = state==="full" && tn<on;
-    const dimO = state==="full" && on<tn;
+    const pens = state==="full" ? pensFor('tp','op') : null;
+    let dimT = state==="full" && tn<on;
+    let dimO = state==="full" && on<tn;
+    if(pens && tn===on && pens.tunleyWon!==null){ dimT=!pens.tunleyWon; dimO=pens.tunleyWon; }
     blocks.push({text:usShort,size:104,weight:700,color:dimT?"rgba(255,255,255,.55)":"#fff",lh:104,right:ts});
     blocks.push({text:opp.toUpperCase(),size:104,weight:700,color:dimO?"rgba(255,255,255,.55)":"#fff",lh:104,right:os,gapBefore:6,shrink:true});
+    if(pens) blocks.push({text:pens.line,size:40,weight:600,color:labelGreen(),lh:40,gapBefore:22,spacing:"4px"});
   }
 
   const meta = (state==="matchday"||state==="off")
@@ -932,6 +949,17 @@ function renderUpcoming(){
   drawBottomBand(same ? ["UPCOMING","\u00b7",niceDate(rows[0][1])] : ["UPCOMING"], null, true);
 }
 
+/* penalties: both boxes filled means the game went to pens.
+   Returns null, or {line, tunleyWon} e.g. "LOST 3-4 ON PENALTIES" */
+function pensFor(tpId,opId){
+  const a=(document.getElementById(tpId).value||"").trim();
+  const b=(document.getElementById(opId).value||"").trim();
+  if(a===""||b==="") return null;
+  const tn=parseInt(a)||0, on=parseInt(b)||0;
+  if(tn===on) return {line:a+"-"+b+" ON PENALTIES", tunleyWon:null};
+  return {line:(tn>on?"WON ":"LOST ")+a+"-"+b+" ON PENALTIES", tunleyWon:tn>on};
+}
+
 function renderDouble(){
   const a=applyOv(FIXTURES[sel.value],0), b=applyOv(FIXTURES[sel2.value],1);
   if(!a||!b) return;
@@ -943,6 +971,8 @@ function renderDouble(){
   const scoresFor=f=> f===a
     ? [(document.getElementById('ts').value||"0").trim(),(document.getElementById('os').value||"0").trim()]
     : [(document.getElementById('ts2').value||"0").trim(),(document.getElementById('os2').value||"0").trim()];
+
+  const pensOf=f=> isFull ? (f===a ? pensFor('tp','op') : pensFor('tp2','op2')) : null;
 
   const infoFor=f=>{
     const parts=[];
@@ -960,7 +990,7 @@ function renderDouble(){
   const blockH=(f,big)=>{
     const lh=Math.round(big*0.92);
     const body = isFull ? 2*Math.round(big*1.02) : bodyLines(f,big).length*lh;
-    return 52 + 12 + body + (infoFor(f).length?56:0);
+    return 52 + 12 + body + (pensOf(f)?48:0) + (infoFor(f).length?56:0);
   };
 
   let big = isFull?66:78, gap=58, hA, hB;
@@ -997,7 +1027,10 @@ function renderDouble(){
       const [ts,os]=scoresFor(f);
       const tn=parseInt(ts)||0, on=parseInt(os)||0;
       // the green tag above already says which side it is, so just TUNLEY here
-      const rows=[["TUNLEY", ts, tn<on],[f[3].toUpperCase(), os, on<tn]];
+      const pens=pensOf(f);
+      let dimT=tn<on, dimO=on<tn;
+      if(pens && tn===on && pens.tunleyWon!==null){ dimT=!pens.tunleyWon; dimO=pens.tunleyWon; }
+      const rows=[["TUNLEY", ts, dimT],[f[3].toUpperCase(), os, dimO]];
       const lh=Math.round(big*1.02);
       rows.forEach((r,i)=>{
         let size=big;
@@ -1012,6 +1045,16 @@ function renderDouble(){
         ctx.textAlign="right"; ctx.fillText(r[1], W-M, y+i*lh); ctx.textAlign="left";
       });
       y += 2*lh;
+      if(pens){
+        ls("4px");
+        ctx.font="600 34px 'Barlow Condensed',sans-serif";
+        ctx.fillStyle=labelGreen();
+        if(photo){ ctx.shadowColor="rgba(0,0,0,.85)"; ctx.shadowBlur=12; ctx.shadowOffsetY=2; }
+        ctx.fillText(pens.line, M, y+6);
+        lift(false);
+        ls("0px");
+        y += 48;
+      }
     }else{
       const lines=bodyLines(f,big), lh=Math.round(big*0.92);
       ctx.font="700 "+big+"px 'Barlow Condensed',sans-serif";
@@ -1197,6 +1240,7 @@ document.querySelectorAll('.states button').forEach(btn=>{
     document.getElementById('twoWrap').style.display = (state==="matchday"||state==="full")?"block":"none";
     syncTwoUp();
     document.getElementById('scorerWrap').style.display = state==="full"?"block":"none";
+    document.querySelectorAll('.penWrap').forEach(e=>e.style.display = state==="full"?"block":"none");
     document.getElementById('motmArea').style.display = state==="motm"?"block":"none";
     document.getElementById('offArea').style.display = state==="off"?"block":"none";
     document.getElementById('xiArea').style.display = (state==="xi"||state==="mdsquad")?"block":"none";
@@ -1233,7 +1277,7 @@ document.getElementById('ovHA').onchange=()=>{ ovFromFields(); render(); };
 document.getElementById('ovTarget').onchange=ovToFields;
 document.getElementById('ovReset').onclick=()=>{ ovClear(); render(); };
 try{ syncOvTargets(); }catch(e){}
-['ts2','os2'].forEach(id=>document.getElementById(id).oninput=render);
+['ts2','os2','tp','op','tp2','op2'].forEach(id=>document.getElementById(id).oninput=render);
 
 sel.onchange=()=>{
   const t=teamOf();
