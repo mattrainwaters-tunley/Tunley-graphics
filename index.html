@@ -902,7 +902,9 @@ function renderUpcoming(){
   while(big>30 && totalAt(big)>room) big-=4;
   const total=totalAt(big);
 
-  let y = top + Math.max(0,(room-total)/2);
+  /* sit the text at the bottom, just above the band, so fewer games
+     means more photo on top rather than dead space underneath */
+  let y = top + Math.max(0, room-total);
   try{ window.__upTop = y; if(window.__placeGuide) window.__placeGuide(); }catch(e){}
 
   drawPhoto();
