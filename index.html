@@ -597,8 +597,8 @@ function render(){
     let dimT = state==="full" && tn<on;
     let dimO = state==="full" && on<tn;
     if(pens && tn===on && pens.tunleyWon!==null){ dimT=!pens.tunleyWon; dimO=pens.tunleyWon; }
-    blocks.push({text:usShort,size:104,weight:700,color:dimT?"rgba(255,255,255,.55)":"#fff",lh:104,right:ts});
-    blocks.push({text:opp.toUpperCase(),size:104,weight:700,color:dimO?"rgba(255,255,255,.55)":"#fff",lh:104,right:os,gapBefore:6,shrink:true});
+    blocks.push({text:usShort,size:104,weight:700,color:"#fff",lh:104,right:ts});
+    blocks.push({text:opp.toUpperCase(),size:104,weight:700,color:"#fff",lh:104,right:os,gapBefore:6,shrink:true});
     if(pens) blocks.push({text:pens.line,size:40,weight:600,color:labelGreen(),lh:40,gapBefore:22,spacing:"4px"});
   }
 
@@ -1041,7 +1041,7 @@ function renderDouble(){
         while(ctx.measureText(r[0]).width > maxW-numW-36 && size>30){
           size-=2; ctx.font="700 "+size+"px 'Barlow Condensed',sans-serif";
         }
-        ctx.fillStyle = r[2] ? "rgba(255,255,255,.55)" : "#fff";
+        ctx.fillStyle = "#fff";   // both sides stay full white, win or lose
         ctx.fillText(r[0], M, y+i*lh+(big-size));
         ctx.font="700 "+big+"px 'Barlow Condensed',sans-serif";
         ctx.textAlign="right"; ctx.fillText(r[1], W-M, y+i*lh); ctx.textAlign="left";
