@@ -87,11 +87,12 @@
   .libBtn{width:100%;margin-top:8px;background:#1e2229;border:1px solid #333a44;color:#cfd6de;
     border-radius:9px;padding:13px;font:inherit;font-size:17px;letter-spacing:.06em;cursor:pointer}
   .libBtn:hover{border-color:#4CAF72}
-  #lib{position:fixed;inset:0;background:#14171c;z-index:50;display:none;flex-direction:column}
+  #lib{position:fixed;inset:0;background:#14171c;z-index:50;display:none;flex-direction:column;overflow-y:auto}
   #lib.open{display:flex}
-  .libHead{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #2a3139;flex-wrap:wrap}
+  .libHead{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #2a3139;flex-wrap:wrap;
+    position:sticky;top:0;background:#14171c;z-index:2}
   .libHead h3{margin:0 auto 0 0;font-size:20px;letter-spacing:.12em;text-transform:uppercase;color:#e6eaef}
-  .libTabs{display:flex;gap:8px;padding:12px 16px 0}
+  .libTabs{display:flex;gap:8px;padding:12px 16px 4px;position:sticky;top:66px;background:#14171c;z-index:2}
   .libTabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;
     background:#1e2229;border:1px solid #333a44;color:#aeb7c1;border-radius:10px;padding:10px 6px;
     font:inherit;font-size:15px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
@@ -99,7 +100,7 @@
   .libTabs button[aria-pressed="true"]{background:#4CAF72;border-color:#4CAF72;color:#06210f;font-weight:600}
   .libClose{background:none;border:1px solid #3b434e;color:#cfd6de;border-radius:8px;padding:8px 14px;font:inherit;font-size:16px;cursor:pointer}
   .libNote{padding:10px 16px 0;color:#7f8a95;font-size:15px}
-  .libGrid{flex:1;overflow:auto;padding:12px 16px 24px;display:grid;
+  .libGrid{flex:none;padding:12px 16px 24px;display:grid;
     grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;align-content:start}
   .libGrid button{padding:0;border:2px solid transparent;border-radius:8px;overflow:hidden;background:#1e2229;
     aspect-ratio:4/5;cursor:pointer}
