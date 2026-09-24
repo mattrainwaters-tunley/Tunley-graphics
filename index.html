@@ -82,6 +82,29 @@
     textarea{min-height:150px}
     .dl{padding:17px;font-size:20px}
   }
+
+  /* ---- club photo library ---- */
+  .libBtn{width:100%;margin-top:8px;background:#1e2229;border:1px solid #333a44;color:#cfd6de;
+    border-radius:9px;padding:13px;font:inherit;font-size:17px;letter-spacing:.06em;cursor:pointer}
+  .libBtn:hover{border-color:#4CAF72}
+  #lib{position:fixed;inset:0;background:#14171c;z-index:50;display:none;flex-direction:column}
+  #lib.open{display:flex}
+  .libHead{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #2a3139;flex-wrap:wrap}
+  .libHead h3{margin:0 auto 0 0;font-size:20px;letter-spacing:.12em;text-transform:uppercase;color:#e6eaef}
+  .libTabs{display:flex;gap:8px;padding:12px 16px 0}
+  .libTabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;
+    background:#1e2229;border:1px solid #333a44;color:#aeb7c1;border-radius:10px;padding:10px 6px;
+    font:inherit;font-size:15px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
+  .libTabs button img{width:34px;height:34px}
+  .libTabs button[aria-pressed="true"]{background:#4CAF72;border-color:#4CAF72;color:#06210f;font-weight:600}
+  .libClose{background:none;border:1px solid #3b434e;color:#cfd6de;border-radius:8px;padding:8px 14px;font:inherit;font-size:16px;cursor:pointer}
+  .libNote{padding:10px 16px 0;color:#7f8a95;font-size:15px}
+  .libGrid{flex:1;overflow:auto;padding:12px 16px 24px;display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;align-content:start}
+  .libGrid button{padding:0;border:2px solid transparent;border-radius:8px;overflow:hidden;background:#1e2229;
+    aspect-ratio:4/5;cursor:pointer}
+  .libGrid button:hover,.libGrid button:focus{border-color:#4CAF72}
+  .libGrid img{width:100%;height:100%;object-fit:cover;display:block}
 </style>
 </head>
 <body>
@@ -212,6 +235,7 @@ George Rowe"></textarea>
     or click to choose
   </div>
   <input type="file" id="file" accept="image/*" hidden>
+  <button class="libBtn" id="libOpen" type="button">Choose from club photos</button>
 
   <div id="nudgeWrap" style="display:none">
     <label>Move photo up / down</label>
@@ -236,6 +260,20 @@ George Rowe"></textarea>
 
 <div class="stage">
   <canvas id="cv" width="1080" height="1350"></canvas>
+</div>
+
+<div id="lib" role="dialog" aria-modal="true" aria-label="Club photos">
+  <div class="libHead">
+    <h3>Club photos</h3>
+    <button class="libClose" id="libClose" type="button">Close</button>
+  </div>
+  <div class="libTabs" id="libTabs">
+    <button type="button" data-team="Firsts"><img src="" alt="">Firsts</button>
+    <button type="button" data-team="Reserves"><img src="" alt="">Reserves</button>
+    <button type="button" data-team="U18s"><img src="" alt="">U18s</button>
+  </div>
+  <div class="libNote" id="libNote">Tap a photo to use it. Newest first.</div>
+  <div class="libGrid" id="libGrid"></div>
 </div>
 
 <script>
@@ -1297,22 +1335,72 @@ drop.ondragleave=()=>drop.classList.remove('over');
 drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');load(e.dataTransfer.files[0])};
 file.onchange=()=>load(file.files[0]);
 
+function usePhoto(img){
+  photo=img;
+  nudge=0.5; nudgeX=0.5; zoom=1;
+  document.getElementById('nudge').value=50;
+  document.getElementById('nudgeX').value=50;
+  document.getElementById('zoom').value=100;
+  // shade and vignette are left where you set them
+  drop.innerHTML="<b>Photo loaded</b>click to swap it";
+  document.getElementById('nudgeWrap').style.display="block";
+  render();
+}
+
 function load(f){
   if(!f||!f.type.startsWith('image/'))return;
   const img=new Image();
-  img.onload=()=>{
-    photo=img;
-    nudge=0.5; nudgeX=0.5; zoom=1;
-    document.getElementById('nudge').value=50;
-    document.getElementById('nudgeX').value=50;
-    document.getElementById('zoom').value=100;
-    // shade and vignette are left where you set them
-    drop.innerHTML="<b>Photo loaded</b>click to swap it";
-    document.getElementById('nudgeWrap').style.display="block";
-    render();
-  };
+  img.onload=()=>usePhoto(img);
   img.src=URL.createObjectURL(f);
 }
+
+/* ---- club photo library: photos live in Supabase storage (bucket squad-photos),
+   the list of which photos to show is the photo_library table ---- */
+const LIB_BASE=SUPABASE_URL+"/storage/v1/object/public/squad-photos/";
+let LIB=null, libTeam="Firsts";
+const libEl=document.getElementById('lib'), libGrid=document.getElementById('libGrid'),
+      libNote=document.getElementById('libNote');
+document.querySelectorAll('#libTabs img').forEach(i=>{ i.src=badge.src; });
+async function libLoad(){
+  if(LIB) return LIB;
+  const r=await fetch(SUPABASE_URL+"/rest/v1/photo_library?select=team,path,sort&order=sort.asc",
+    {headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+SUPABASE_KEY}});
+  if(!r.ok) throw new Error("photo list "+r.status);
+  LIB=await r.json(); return LIB;
+}
+function libShow(team){
+  libTeam=team;
+  document.querySelectorAll('#libTabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.team===team));
+  const rows=(LIB||[]).filter(p=>p.team===team);
+  libGrid.innerHTML="";
+  libNote.textContent=rows.length? rows.length+" photos. Tap one to use it. Newest first." : "No photos for this team yet.";
+  rows.forEach(p=>{
+    const b=document.createElement('button'); b.type="button";
+    const t=document.createElement('img'); t.loading="lazy"; t.alt="";
+    t.src=LIB_BASE+p.path.replace(/([^/]+)$/,'thumb/$1');
+    b.appendChild(t);
+    b.onclick=()=>{
+      libNote.textContent="Loading photo...";
+      const img=new Image(); img.crossOrigin="anonymous";
+      img.onload=()=>{ libEl.classList.remove('open'); usePhoto(img); };
+      img.onerror=()=>{ libNote.textContent="That photo would not load, try another."; };
+      img.src=LIB_BASE+p.path;
+    };
+    libGrid.appendChild(b);
+  });
+}
+document.getElementById('libOpen').onclick=async()=>{
+  const f=currentRow(); const t=f&&f[0];
+  libEl.classList.add('open');
+  document.querySelectorAll('#libTabs img').forEach(i=>{ if(!i.src||i.src===location.href) i.src=badge.src; });
+  libNote.textContent="Loading photos...";
+  try{ await libLoad(); libShow(t==="Reserves"||t==="U18s"?t:"Firsts"); }
+  catch(e){ libNote.textContent="Could not load the club photos right now."; console.log(e); }
+};
+document.querySelectorAll('#libTabs button').forEach(b=>b.onclick=()=>libShow(b.dataset.team));
+document.getElementById('libClose').onclick=()=>libEl.classList.remove('open');
+libEl.onclick=e=>{ if(e.target===libEl) libEl.classList.remove('open'); };
+document.addEventListener('keydown',e=>{ if(e.key==="Escape") libEl.classList.remove('open'); });
 
 document.getElementById('nudge').oninput =e=>{nudge =e.target.value/100;render()};
 document.getElementById('nudgeX').oninput=e=>{nudgeX=e.target.value/100;render()};
@@ -1429,5 +1517,6 @@ loadFixtures();
   place();
 })();
 </script>
+
 </body>
 </html>
