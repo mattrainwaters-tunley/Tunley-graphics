@@ -1131,77 +1131,131 @@ function renderDouble(){
 
 /* ---- matchday and squad on one graphic ---- */
 function renderMatchdaySquad(){
+  /* Layout C: MATCHDAY SQUAD runs big up the right edge, crest and fixture
+     top left, the squad sits low on the left, date / time / ground in the
+     green band. The middle of the photo is left clear. */
   const f=applyOv(FIXTURES[sel.value],0);
   const [team,iso,time,opp,ha,venue]=f;
-  const maxW=W-M*2, us=teamNames(team);
+  const us=teamNames(team);
+  const bandH=112, bandTop=H-bandH;
 
+  /* vertical title: size it to fill the height between the top and the band */
+  const TITLE_A="MATCHDAY", TITLE_B="SQUAD", tGap=0.28;   // gap as a share of the font size
+  const tTop=44, tBottom=bandTop-40, tRight=W-34;
+  const titleW=sz=>{
+    ctx.font="700 "+sz+"px 'Barlow Condensed',sans-serif"; ls("2px");
+    const w=ctx.measureText(TITLE_A).width+ctx.measureText(TITLE_B).width+sz*tGap;
+    ls("0px"); return w;
+  };
+  let tSize=Math.floor(200*(tBottom-tTop)/titleW(200));
+  tSize=Math.min(tSize,230);
+  const capH=Math.round(tSize*0.70);
+  const tLeft=tRight-capH;                 // left edge of the title column
+  const contentR=tLeft-34;                 // everything else stays left of this
+
+  /* header: crest, then who we play */
+  const bW=132, bY=54, hx=M+bW+26, hW=contentR-hx;
+  ctx.font="600 30px 'Barlow Condensed',sans-serif"; ls("4px");
+  let usSize=30; while(ctx.measureText(us.long.toUpperCase()).width>hW && usSize>20){ usSize-=1; ctx.font="600 "+usSize+"px 'Barlow Condensed',sans-serif"; }
+  ls("0px");
+  let oSize=58, oLines=wrap("v "+opp.toUpperCase(),oSize,700,hW);
+  while(oLines.length>2 && oSize>34){ oSize-=2; oLines=wrap("v "+opp.toUpperCase(),oSize,700,hW); }
+  const oLH=Math.round(oSize*0.95);
+  const headH=usSize+14+oLines.length*oLH;
+  const headY=bY+Math.max(0,Math.round((bW-headH)/2));
+  const headBottom=Math.max(bY+bW, headY+headH);
+
+  /* the squad: two columns once there are more than eight names, sitting
+     low so the photo keeps the middle of the frame */
+  const names = squadNames().length ? squadNames() : ["Add the squad","one name per line"];
+  const listW=contentR-M;
+  const twoCol=names.length>8;
+  const rows=twoCol?Math.ceil(names.length/2):names.length;
+  const colGap=36, colW=twoCol?(listW-colGap)/2:listW;
+  const rowOf=v=>Math.round(v*1.2);
+  const listBottom=bandTop-40;
+  const fits=(sz,top)=>{
+    ctx.font="600 "+sz+"px 'Barlow Condensed',sans-serif"; ls("0.6px");
+    const widest=Math.max.apply(null,names.map(n=>ctx.measureText(n.toUpperCase()).width));
+    ls("0px");
+    return rows*rowOf(sz)<=listBottom-top && widest<=colW-8;
+  };
+  // first try to keep the names in the lower part of the frame, then allow
+  // them to climb as far as the header if the squad is long
+  let size=48, lowTop=Math.round(H*0.54);
+  while(size>30 && !fits(size,lowTop)) size-=1;
+  if(!fits(size,lowTop)){ size=48; while(size>18 && !fits(size,headBottom+50)) size-=1; }
+  const rowH=rowOf(size);
+  const listTop=listBottom-rows*rowH;
+
+  /* background: photo, then shade kept to tight bands behind the words */
   ctx.clearRect(0,0,W,H);
   drawPhoto();
-  drawSquadScrim();
+  if(photo){
+    if(shade>0){
+      const S=a=>"rgba(5,18,12,"+(a*shade).toFixed(3)+")";
+      // behind the names
+      const b0=Math.max(0,listTop-150);
+      const gb=ctx.createLinearGradient(0,b0,0,bandTop);
+      gb.addColorStop(0,S(0)); gb.addColorStop(Math.min(.99,150/(bandTop-b0)),S(.62)); gb.addColorStop(1,S(.82));
+      ctx.fillStyle=gb; ctx.fillRect(0,b0,W,bandTop-b0);
+      // behind the vertical title
+      const gr=ctx.createLinearGradient(tLeft-140,0,W,0);
+      gr.addColorStop(0,S(0)); gr.addColorStop(.55,S(.55)); gr.addColorStop(1,S(.72));
+      ctx.fillStyle=gr; ctx.fillRect(tLeft-140,0,W-(tLeft-140),bandTop);
+      // behind the crest and fixture
+      const gt=ctx.createLinearGradient(0,0,0,headBottom+90);
+      gt.addColorStop(0,S(.70)); gt.addColorStop(.6,S(.40)); gt.addColorStop(1,S(0));
+      ctx.fillStyle=gt; ctx.fillRect(0,0,W,headBottom+90);
+    }
+    drawVignette();
+  }else{
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,"rgba(0,0,0,.16)"); g.addColorStop(1,"rgba(0,0,0,.40)");
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  }
   ctx.textBaseline="top";
 
-  /* crest, with MATCHDAY beside it */
-  const bW=132, bY=54;
+  /* crest and fixture */
   if(badge.complete && badge.naturalWidth) ctx.drawImage(badge,M,bY,bW,bW);
-  ctx.font="600 32px 'Barlow Condensed',sans-serif";
-  ls("12.6px"); ctx.fillStyle=GREEN;
-  ctx.fillText("MATCHDAY SQUAD", M+bW+26, bY+50);
-  ls("0px");
-
-  /* us, then the opponent big */
-  let y = bY+bW+40;
-  ctx.fillStyle="rgba(255,255,255,.78)";
-  ctx.font="700 46px 'Barlow Condensed',sans-serif";
-  ls("1.2px");
-  ctx.fillText(us.long, M, y);
-  ls("0px");
-  y += 50;
-
-  ctx.fillStyle="rgba(255,255,255,.55)";
-  ctx.font="400 34px 'Barlow Condensed',sans-serif";
-  ctx.fillText("v", M, y);
-  y += 40;
-
-  let oSize=92, oLines=wrap(opp.toUpperCase(),oSize,700,maxW);
-  while(oLines.length>2 && oSize>52){ oSize-=4; oLines=wrap(opp.toUpperCase(),oSize,700,maxW); }
-  const oLH=Math.round(oSize*0.92);
+  lift(true);
+  ctx.font="600 "+usSize+"px 'Barlow Condensed',sans-serif"; ls("4px");
+  ctx.fillStyle=labelGreen();
+  ctx.fillText(us.long.toUpperCase(),hx,headY);
+  ls("0.6px");
   ctx.fillStyle="#fff";
   ctx.font="700 "+oSize+"px 'Barlow Condensed',sans-serif";
-  oLines.forEach((l,i)=>ctx.fillText(l,M,y+i*oLH));
-  lift(false);
-  y += oLines.length*oLH;
+  oLines.forEach((l,i)=>ctx.fillText(l,hx,headY+usSize+14+i*oLH));
+  ls("0px");
 
-  /* green band along the bottom */
-  const bandTop = drawBottomBand([niceDate(iso),"·",time,"·",venue.toUpperCase()]);
+  /* MATCHDAY SQUAD up the right edge, reading bottom to top */
+  ctx.save();
+  ctx.translate(tRight,tBottom);
+  ctx.rotate(-Math.PI/2);
+  ctx.textBaseline="alphabetic";
+  ctx.font="700 "+tSize+"px 'Barlow Condensed',sans-serif"; ls("2px");
+  if(photo){ ctx.shadowColor="rgba(0,0,0,.55)"; ctx.shadowBlur=18; ctx.shadowOffsetX=-3; ctx.shadowOffsetY=0; }
+  ctx.fillStyle="#fff";
+  ctx.fillText(TITLE_A,0,0);
+  ctx.fillStyle=labelGreen();
+  ctx.fillText(TITLE_B,ctx.measureText(TITLE_A).width+tSize*tGap,0);
+  ls("0px");
+  ctx.restore();
+  ctx.textBaseline="top";
+  lift(true);
 
-  /* the squad, in whatever room is left */
-  const names = squadNames().length ? squadNames() : ["Add the squad","one name per line"];
-  const zoneTop = y + 44;
-  const avail = (bandTop-40) - zoneTop;
-  const twoCol = names.length>6;
-  const rows = twoCol?Math.ceil(names.length/2):names.length;
-  const colW = twoCol?(maxW-40)/2:maxW;
-  let size=52;
-  const rowOf=v=>Math.max(Math.round(v*1.3), v+12);
-  while(size>18){
-    ctx.font="600 "+size+"px 'Barlow Condensed',sans-serif";
-    const widest=Math.max.apply(null,names.map(n=>ctx.measureText(n.toUpperCase()).width));
-    if(rows*rowOf(size)<=avail && widest<=colW-10) break;
-    size-=2;
-  }
-  const rowH=rowOf(size);
-  // sit the block in the middle of whatever room is left, so there is no
-  // pool of empty space above the bottom line
-  const listTop = zoneTop + Math.max(0,(avail - rows*rowH)/2);
-  ctx.font="600 "+size+"px 'Barlow Condensed',sans-serif";
-  ls("0.6px"); lift(true);
+  /* the squad */
+  ctx.font="600 "+size+"px 'Barlow Condensed',sans-serif"; ls("0.6px");
+  ctx.fillStyle="#fff";
   names.forEach((n,i)=>{
     const col=twoCol?Math.floor(i/rows):0;
     const row=twoCol?i%rows:i;
-    ctx.fillStyle="#fff";
-    ctx.fillText(n.toUpperCase(), M+col*(colW+40), listTop+row*rowH);
+    ctx.fillText(n.toUpperCase(), M+col*(colW+colGap), listTop+row*rowH);
   });
   ls("0px"); lift(false);
+
+  /* green band along the bottom */
+  drawBottomBand([niceDate(iso),"·",time,"·",venue.toUpperCase()]);
 }
 
 function renderSquad(){
