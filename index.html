@@ -1178,12 +1178,21 @@ function renderMonthInner(){
     ctx.fillStyle="rgba(255,255,255,.22)";
     ctx.fillRect(M+dateW+10, y0+Math.round(rowH*0.2), 2, Math.round(rowH*0.6));
 
-    const textH=oppSize*0.92+infoSize*1.25;
-    y=y0+Math.round((rowH-textH)/2);
+    /* measure where the name's ink really starts and ends, so the
+       home/away tab always sits a fixed gap below the lettering and
+       can never ride up into it, whatever the font or row size */
+    ctx.font="700 "+oppSize+F; ls("0.8px");
+    const nm=ctx.measureText(up(f));
+    const inkTop=isFinite(nm.actualBoundingBoxAscent) ? -nm.actualBoundingBoxAscent : oppSize*0.2;
+    const inkBot=isFinite(nm.actualBoundingBoxDescent) ? nm.actualBoundingBoxDescent : oppSize;
+    const tabGap=Math.max(10,Math.round(oppSize*0.2));
+    const tabH=Math.round(infoSize*1.22);
+    const textH=(inkBot-inkTop)+tabGap+tabH;
+    y=y0+Math.round((rowH-textH)/2-inkTop);
     lift(true);
-    ctx.font="700 "+oppSize+F; ctx.fillStyle="#fff"; ls("0.8px");
+    ctx.fillStyle="#fff";
     ctx.fillText(up(f), nameX, y);
-    y+=Math.round(oppSize*0.98);
+    y=Math.round(y+inkBot+tabGap+infoSize*0.10);
 
     const info=[f[4]==="A"?"AWAY":"HOME", f[2]];
     if(f[5]) info.push(f[5].toUpperCase());
