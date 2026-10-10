@@ -40,7 +40,7 @@
 
   .drop{
     margin-top:6px;border:2px dashed #3b434e;border-radius:9px;
-    padding:22px 14px;text-align:center;color:#79828d;font-size:16px;
+    padding:12px 14px;text-align:center;color:#79828d;font-size:16px;
     cursor:pointer;transition:border-color .15s,background .15s;
   }
   .drop:hover,.drop.over{border-color:#4CAF72;background:rgba(76,175,114,.07)}
@@ -49,7 +49,9 @@
   .row{display:flex;gap:10px}
   .row>div{flex:1}
 
-  .slider{width:100%;margin-top:8px;accent-color:#4CAF72}
+  .slider{width:100%;margin-top:2px;accent-color:#4CAF72}
+  .sliders{display:grid;grid-template-columns:1fr 1fr;gap:2px 16px;margin-top:10px}
+  .sliders label{margin:8px 0 0;font-size:12px}
 
   .dl{
     width:100%;margin-top:24px;background:#4CAF72;color:#06210f;border:0;
@@ -62,9 +64,9 @@
 
   .hint{font-size:14px;color:#69727c;margin-top:12px;line-height:1.6}
 
-  .stage{flex:1;display:flex;justify-content:center;align-items:flex-start}
+  .stage{flex:1;display:flex;justify-content:center;align-items:flex-start;position:sticky;top:20px}
   canvas{
-    width:100%;max-width:520px;height:auto;
+    width:auto;max-width:min(520px,100%);height:auto;max-height:calc(100vh - 40px);
     border-radius:5px;box-shadow:0 12px 40px rgba(0,0,0,.55);
     background:#0c1a12;
   }
@@ -260,18 +262,14 @@ George Rowe"></textarea>
   <button class="libBtn" id="libOpen" type="button">Choose from club photos</button>
 
   <div id="nudgeWrap" style="display:none">
-    <label>Move photo up / down</label>
-    <input type="range" class="slider" id="nudge" min="0" max="100" value="50">
-    <label>Move photo left / right</label>
-    <input type="range" class="slider" id="nudgeX" min="0" max="100" value="50">
-    <label>Zoom</label>
-    <input type="range" class="slider" id="zoom" min="100" max="300" value="100">
-    <label>Photo strength</label>
-    <input type="range" class="slider" id="opacity" min="15" max="100" value="100">
-    <label>Shade behind the text</label>
-    <input type="range" class="slider" id="shade" min="0" max="100" value="40">
-    <label>Vignette</label>
-    <input type="range" class="slider" id="vig" min="0" max="100" value="0">
+   <div class="sliders">
+    <div><label>Up / down</label><input type="range" class="slider" id="nudge" min="0" max="100" value="50"></div>
+    <div><label>Left / right</label><input type="range" class="slider" id="nudgeX" min="0" max="100" value="50"></div>
+    <div><label>Zoom</label><input type="range" class="slider" id="zoom" min="100" max="300" value="100"></div>
+    <div><label>Photo strength</label><input type="range" class="slider" id="opacity" min="15" max="100" value="100"></div>
+    <div><label>Shade behind text</label><input type="range" class="slider" id="shade" min="0" max="100" value="40"></div>
+    <div><label>Vignette</label><input type="range" class="slider" id="vig" min="0" max="100" value="0"></div>
+   </div>
   </div>
 
   <button class="dl" id="dl">Save image</button>
@@ -1269,16 +1267,16 @@ function renderDouble(){
 
   const bandTop = H-132;
   const top = 56+150+70;
-  const room = bandTop-40-top;
+  const room = bandTop-36-top;
 
   const bodyLines=(f,big)=> isFull ? null : wrap("v "+f[3].toUpperCase(), big, 700, maxW);
   const blockH=(f,big)=>{
     const lh=Math.round(big*0.92);
     const body = isFull ? 2*Math.round(big*1.02) : bodyLines(f,big).length*lh;
-    return 52 + 12 + body + (pensOf(f)?48:0) + (infoFor(f).length?56:0);
+    return 50 + body + (pensOf(f)?44:0) + (infoFor(f).length?46:0);
   };
 
-  let big = isFull?66:78, gap=58, hA, hB;
+  let big = isFull?60:66, gap=34, hA, hB;
   while(big>38){
     hA=blockH(a,big); hB=blockH(b,big);
     if(hA+gap+hB<=room) break;
@@ -1286,7 +1284,9 @@ function renderDouble(){
   }
   hA=blockH(a,big); hB=blockH(b,big);
 
-  let y = top + Math.max(0,(room-(hA+gap+hB))/2);
+  /* two matches sit as low as they can, leaving the photo the room above */
+  let y = top + Math.max(0, room-(hA+gap+hB));
+  window.__dblTop = y-50; if(window.__placeGuide) window.__placeGuide();
 
   ctx.clearRect(0,0,W,H);
   drawPhoto();
@@ -1297,8 +1297,8 @@ function renderDouble(){
 
   [a,b].forEach(f=>{
     /* which team */
-    ctx.font="700 44px 'Barlow Condensed',sans-serif";
-    ls("8px"); ctx.fillStyle=labelGreen();
+    ctx.font="700 36px 'Barlow Condensed',sans-serif";
+    ls("7px"); ctx.fillStyle=labelGreen();
     // these labels are small and coloured, so they get a denser shadow
     // than the white text around them
     if(photo){ ctx.shadowColor="rgba(0,0,0,.85)"; ctx.shadowBlur=12; ctx.shadowOffsetY=2; }
@@ -1306,7 +1306,7 @@ function renderDouble(){
     ctx.fillText(tag(f[0]), M, y);   // second pass deepens the shadow
     lift(false);
     ls("0px");
-    y += 64;
+    y += 50;
 
     if(isFull){
       const [ts,os]=scoresFor(f);
@@ -1335,10 +1335,10 @@ function renderDouble(){
         ctx.font="600 34px 'Barlow Condensed',sans-serif";
         ctx.fillStyle=labelGreen();
         if(photo){ ctx.shadowColor="rgba(0,0,0,.85)"; ctx.shadowBlur=12; ctx.shadowOffsetY=2; }
-        ctx.fillText(pens.line, M, y+6);
+        ctx.fillText(pens.line, M, y+4);
         lift(false);
         ls("0px");
-        y += 48;
+        y += 44;
       }
     }else{
       const lines=bodyLines(f,big), lh=Math.round(big*0.92);
@@ -1351,7 +1351,7 @@ function renderDouble(){
     const info=infoFor(f);
     if(info.length){
       ls("3px");
-      let is=40, ig=24;
+      let is=34, ig=20;
       const iw=(sz,g)=>{ ctx.font="600 "+sz+"px 'Barlow Condensed',sans-serif";
         return info.reduce((t,part)=>t+ctx.measureText(part).width+g,0)-g; };
       while(iw(is,ig)>maxW && is>22){ is-=1; ig=Math.max(12,ig-1); }
@@ -1359,11 +1359,11 @@ function renderDouble(){
       let x=M;
       info.forEach(part=>{
         ctx.fillStyle = part==="·" ? "rgba(255,255,255,.55)" : "rgba(255,255,255,.92)";
-        ctx.fillText(part,x,y+10);
+        ctx.fillText(part,x,y+6);
         x += ctx.measureText(part).width + ig;
       });
       ls("0px");
-      y += 56;
+      y += 46;
     }
     y += gap;
   });
@@ -1807,6 +1807,7 @@ loadFixtures();
       if(rows){
         var two = document.getElementById("twoUp");
         y = rows[two && two.checked ? 1 : 0];
+        if(two && two.checked && typeof window.__dblTop === "number") y = window.__dblTop;
       }
     }
     if(y === null){ g.style.display = "none"; return; }
