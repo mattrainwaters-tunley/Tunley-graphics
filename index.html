@@ -94,8 +94,8 @@
   .libHead{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #2a3139;flex-wrap:wrap;
     position:sticky;top:0;background:#14171c;z-index:2}
   .libHead h3{margin:0 auto 0 0;font-size:20px;letter-spacing:.12em;text-transform:uppercase;color:#e6eaef}
-  .libTabs{display:flex;gap:8px;padding:12px 16px 4px;position:sticky;top:66px;background:#14171c;z-index:2}
-  .libTabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;
+  .libTabs{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px 4px;position:sticky;top:66px;background:#14171c;z-index:2}
+  .libTabs button{flex:1 1 90px;display:flex;flex-direction:column;align-items:center;gap:4px;
     background:#1e2229;border:1px solid #333a44;color:#aeb7c1;border-radius:10px;padding:10px 6px;
     font:inherit;font-size:15px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
   .libTabs button img{width:34px;height:34px}
@@ -108,6 +108,12 @@
     aspect-ratio:4/5;cursor:pointer}
   .libGrid button:hover,.libGrid button:focus{border-color:#4CAF72}
   .libGrid img{width:100%;height:100%;object-fit:cover;display:block}
+  .libGrid button{position:relative}
+  .libGrid.wide{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
+  .libGrid.wide button{aspect-ratio:4/3;background:#0e1013}
+  .libGrid.wide img{object-fit:contain}
+  .libGrid .cap{position:absolute;left:0;right:0;bottom:0;padding:14px 6px 5px;font-size:13px;line-height:1.2;
+    color:#fff;text-align:left;background:linear-gradient(transparent,rgba(0,0,0,.75))}
 </style>
 </head>
 <body>
@@ -292,6 +298,8 @@ George Rowe"></textarea>
     <button type="button" data-team="Firsts"><img src="" alt="">Firsts</button>
     <button type="button" data-team="Reserves"><img src="" alt="">Reserves</button>
     <button type="button" data-team="U18s"><img src="" alt="">U18s</button>
+    <button type="button" data-team="Old squads"><img src="" alt="">Old squads</button>
+    <button type="button" data-team="Archive"><img src="" alt="">Club archive</button>
   </div>
   <div class="libNote" id="libNote">Tap a photo to use it. Newest first.</div>
   <div class="libGrid" id="libGrid"></div>
@@ -1702,7 +1710,7 @@ const libEl=document.getElementById('lib'), libGrid=document.getElementById('lib
 document.querySelectorAll('#libTabs img').forEach(i=>{ i.src=badge.src; });
 async function libLoad(){
   if(LIB) return LIB;
-  const r=await fetch(SUPABASE_URL+"/rest/v1/photo_library?select=team,path,sort&order=sort.asc",
+  const r=await fetch(SUPABASE_URL+"/rest/v1/photo_library?select=team,path,sort,label&order=sort.asc",
     {headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+SUPABASE_KEY}});
   if(!r.ok) throw new Error("photo list "+r.status);
   LIB=await r.json(); return LIB;
@@ -1712,12 +1720,15 @@ function libShow(team){
   document.querySelectorAll('#libTabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.team===team));
   const rows=(LIB||[]).filter(p=>p.team===team);
   libGrid.innerHTML="";
-  libNote.textContent=rows.length? rows.length+" photos. Tap one to use it. Newest first." : "No photos for this team yet.";
+  const old = team==="Old squads"||team==="Archive";
+  libGrid.classList.toggle('wide', old);
+  libNote.textContent=rows.length? rows.length+" photos. Tap one to use it. "+(old?"Oldest first.":"Newest first.") : "No photos here yet.";
   rows.forEach(p=>{
     const b=document.createElement('button'); b.type="button";
     const t=document.createElement('img'); t.loading="lazy"; t.alt="";
     t.src=LIB_BASE+p.path.replace(/([^/]+)$/,'thumb/$1');
     b.appendChild(t);
+    if(old && p.label){ const c=document.createElement('span'); c.className="cap"; c.textContent=p.label; b.appendChild(c); }
     b.onclick=()=>{
       libNote.textContent="Loading photo...";
       const img=new Image(); img.crossOrigin="anonymous";
@@ -1733,7 +1744,7 @@ document.getElementById('libOpen').onclick=async()=>{
   libEl.classList.add('open');
   document.querySelectorAll('#libTabs img').forEach(i=>{ if(!i.src||i.src===location.href) i.src=badge.src; });
   libNote.textContent="Loading photos...";
-  try{ await libLoad(); libShow(t==="Reserves"||t==="U18s"?t:"Firsts"); }
+  try{ await libLoad(); libShow(state==="throwback"?"Old squads":(t==="Reserves"||t==="U18s"?t:"Firsts")); }
   catch(e){ libNote.textContent="Could not load the club photos right now."; console.log(e); }
 };
 document.querySelectorAll('#libTabs button').forEach(b=>b.onclick=()=>libShow(b.dataset.team));
