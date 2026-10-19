@@ -299,7 +299,6 @@ George Rowe"></textarea>
     <button type="button" data-team="Reserves"><img src="" alt="">Reserves</button>
     <button type="button" data-team="U18s"><img src="" alt="">U18s</button>
     <button type="button" data-team="Old squads"><img src="" alt="">Old squads</button>
-    <button type="button" data-team="Archive"><img src="" alt="">Club archive</button>
   </div>
   <div class="libNote" id="libNote">Tap a photo to use it. Newest first.</div>
   <div class="libGrid" id="libGrid"></div>
@@ -1720,7 +1719,7 @@ function libShow(team){
   document.querySelectorAll('#libTabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.team===team));
   const rows=(LIB||[]).filter(p=>p.team===team);
   libGrid.innerHTML="";
-  const old = team==="Old squads"||team==="Archive";
+  const old = team==="Old squads";
   libGrid.classList.toggle('wide', old);
   libNote.textContent=rows.length? rows.length+" photos. Tap one to use it. "+(old?"Oldest first.":"Newest first.") : "No photos here yet.";
   rows.forEach(p=>{
