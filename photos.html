@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tunley Athletic - photo library</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#14161a;color:#e6eaef;font-family:'Barlow Condensed',system-ui,sans-serif;padding:22px 16px 80px}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:30px;font-weight:700;letter-spacing:.04em}
+  .sub{font-size:17px;color:#79828d;margin:4px 0 20px}
+  label{display:block;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#7f8a95;margin:0 0 5px}
+  input{width:100%;background:#1e2229;border:1px solid #333a44;color:#e6eaef;border-radius:7px;padding:10px 11px;font-size:17px;font-family:inherit}
+  button{background:#4CAF72;color:#06210f;border:0;border-radius:8px;padding:12px 20px;font-size:17px;font-weight:700;
+    letter-spacing:.11em;text-transform:uppercase;cursor:pointer;font-family:inherit}
+  button:disabled{background:#2a3138;color:#5d6670;cursor:not-allowed}
+  button.ghost{background:transparent;color:#aeb7c1;border:1px solid #333a44;font-weight:600}
+  button.red{background:#C0463B;color:#fff}
+  .card{background:#191d23;border:1px solid #262c34;border-radius:11px;padding:16px;margin-bottom:12px}
+  .row{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  .bar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  .msg{font-size:16px;color:#79828d}
+  .msg.ok{color:#4CAF72} .msg.bad{color:#E07A6F}
+  .note{font-size:15px;color:#6b7480;margin-top:10px}
+  .pills{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 12px}
+  .pills button{background:#1e2229;border:1px solid #333a44;color:#aeb7c1;padding:8px 14px;font-size:14px;letter-spacing:.09em;font-weight:600}
+  .pills button[aria-pressed="true"]{background:#4CAF72;border-color:#4CAF72;color:#06210f}
+  .pills.modes button[aria-pressed="true"]{background:#e6eaef;border-color:#e6eaef;color:#14161a}
+
+  /* sort mode: one photo at a time */
+  .sorter{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .sorter .pic{width:min(100%,560px,52vh);aspect-ratio:4/5;background:#0e1013;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .sorter .pic.wide{aspect-ratio:4/3;width:min(100%,680px,85vh)}
+  .sorter .pic img{width:100%;height:100%;object-fit:contain}
+  .sorter .cap{font-size:16px;color:#aeb7c1;min-height:20px;text-align:center}
+  .sorter .btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:560px}
+  .sorter .btns button{padding:18px 10px;font-size:20px}
+  .sorter .small{display:flex;gap:10px;justify-content:center}
+  .sorter .small button{padding:8px 14px;font-size:14px}
+
+  /* grids for used / removed */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+  .tile{position:relative;border-radius:8px;overflow:hidden;background:#1e2229;aspect-ratio:4/5}
+  .tile.wide{aspect-ratio:4/3}
+  .tile img{width:100%;height:100%;object-fit:cover;display:block}
+  .tile .t{position:absolute;left:0;right:0;top:0;padding:5px 6px 14px;font-size:13px;color:#fff;background:linear-gradient(rgba(0,0,0,.8),transparent)}
+  .tile button{position:absolute;right:5px;bottom:5px;padding:4px 8px;font-size:12px;letter-spacing:.06em;background:rgba(20,23,28,.88);color:#e6eaef;border:1px solid #3b434e}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Club photo library</h1>
+  <div class="sub">Sort out which photos to keep, and clear out ones that have already been used.
+    <a href="./" style="color:#4CAF72">Back to the graphic maker</a></div>
+
+  <!-- not signed in -->
+  <div id="signinBox" style="display:none">
+    <div class="card">
+      <label for="email">Club admin email</label>
+      <input type="email" id="email" autocomplete="email" inputmode="email" placeholder="you@example.com">
+      <div class="row"><button id="signin">Email me a link</button></div>
+      <div class="msg" id="signinMsg" style="margin-top:10px"></div>
+      <div class="note">No password. You get a one time link by email that signs you in on this device.
+        If you are already signed in to the fixture editor on this device, you are signed in here too.</div>
+    </div>
+  </div>
+
+  <!-- signed in -->
+  <div id="editor" style="display:none">
+    <div class="bar">
+      <span class="msg" id="who"></span>
+      <button class="ghost" id="signout">Sign out</button>
+    </div>
+    <div class="pills" id="teams">
+      <button data-team="Firsts" aria-pressed="true">Firsts</button>
+      <button data-team="Reserves" aria-pressed="false">Reserves</button>
+      <button data-team="U18s" aria-pressed="false">U18s</button>
+      <button data-team="Old squads" aria-pressed="false">Old squads</button>
+    </div>
+    <div class="pills modes" id="modes">
+      <button data-mode="sort" aria-pressed="true">Keep or remove</button>
+      <button data-mode="used" aria-pressed="false">Used</button>
+      <button data-mode="removed" aria-pressed="false">Removed</button>
+    </div>
+    <div class="msg" id="info" style="margin-bottom:12px"></div>
+    <div id="view"></div>
+  </div>
+</div>
+
+<script>
+/* No outside libraries: plain fetch against Supabase. */
+const SUPABASE_URL="https://gxbvuqtjkpynbhjqggxg.supabase.co";
+const SUPABASE_KEY="sb_publishable_UOFrYxeVOGnMMdCtijIPVA_ZCZ2Q1nt";
+const LIB_BASE=SUPABASE_URL+"/storage/v1/object/public/squad-photos/";
+const PAGE_URL=location.href.split('#')[0].split('?')[0];
+const STORE="tunley-fixture-session";   // shared with the fixture editor, so one sign in covers both
+
+const $=id=>document.getElementById(id);
+function say(el,cls,text){ el.className="msg"+(cls?" "+cls:""); el.textContent=text; }
+
+let session=null, ROWS=[], team="Firsts", mode="sort", undoStack=[];
+
+/* ---- session ---- */
+function loadSession(){ try{ const r=localStorage.getItem(STORE); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function saveSession(s){ session=s; try{ s?localStorage.setItem(STORE,JSON.stringify(s)):localStorage.removeItem(STORE); }catch(e){} }
+function claims(tok){ try{ const b=tok.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'); return JSON.parse(decodeURIComponent(escape(atob(b)))); }catch(e){ return {}; } }
+const emailFromToken=tok=>claims(tok).email||"";
+function expired(s){ if(!s||!s.access_token) return true; const exp=claims(s.access_token).exp; return exp?(exp*1000)<Date.now()+30000:false; }
+function sessionFromUrl(){
+  const h=location.hash.startsWith('#')?location.hash.slice(1):""; if(!h) return null;
+  const q=new URLSearchParams(h); const at=q.get('access_token'); if(!at) return null;
+  return {access_token:at, refresh_token:q.get('refresh_token')||"", email:emailFromToken(at)};
+}
+async function refreshSession(){
+  if(!session||!session.refresh_token) return false;
+  try{
+    const r=await fetch(SUPABASE_URL+"/auth/v1/token?grant_type=refresh_token",{method:"POST",
+      headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json"},body:JSON.stringify({refresh_token:session.refresh_token})});
+    if(!r.ok) return false; const d=await r.json(); if(!d.access_token) return false;
+    saveSession({access_token:d.access_token,refresh_token:d.refresh_token||session.refresh_token,email:emailFromToken(d.access_token)});
+    return true;
+  }catch(e){ return false; }
+}
+function headers(json){
+  const h={apikey:SUPABASE_KEY, Authorization:"Bearer "+((session&&session.access_token)||SUPABASE_KEY)};
+  if(json) h["Content-Type"]="application/json"; return h;
+}
+async function api(path,opts){
+  if(session && expired(session)) await refreshSession();
+  opts=opts||{}; opts.headers=Object.assign(headers(!!opts.body), opts.headers||{});
+  const r=await fetch(SUPABASE_URL+path,opts);
+  let body=null; try{ body=await r.json(); }catch(e){}
+  if(!r.ok){ throw new Error((body&&(body.message||body.error_description||body.error||body.msg))||("HTTP "+r.status)); }
+  return body;
+}
+const rpc=(fn,args)=>api("/rest/v1/rpc/"+fn,{method:"POST",body:JSON.stringify(args)});
+
+/* ---- sign in ---- */
+$('signin').onclick=async()=>{
+  const msg=$('signinMsg'), email=$('email').value.trim();
+  if(!email){ say(msg,"bad","Put your email in first."); return; }
+  say(msg,"","Sending..."); $('signin').disabled=true;
+  try{
+    await fetch(SUPABASE_URL+"/auth/v1/otp?redirect_to="+encodeURIComponent(PAGE_URL),{method:"POST",
+      headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json"},body:JSON.stringify({email,create_user:false})})
+      .then(async r=>{ if(!r.ok){ const b=await r.json().catch(()=>({})); throw new Error(b.msg||b.message||("HTTP "+r.status)); } });
+    say(msg,"ok","Link sent. Open the email on this device and tap the link.");
+  }catch(e){ say(msg,"bad",/signup|not.*(allowed|found)/i.test(e.message)?"That email is not set up as a club admin.":e.message); }
+  $('signin').disabled=false;
+};
+$('signout').onclick=()=>{ saveSession(null); show(); };
+
+function show(){
+  const inn=!!(session&&session.access_token);
+  $('signinBox').style.display=inn?"none":"block";
+  $('editor').style.display=inn?"block":"none";
+  if(inn){ say($('who'),"","Signed in as "+(session.email||"club admin")); load(); }
+}
+
+/* ---- data ---- */
+async function load(){
+  say($('info'),"","Loading photos...");
+  try{
+    ROWS=await api("/rest/v1/photo_library?select=id,team,path,sort,label,used_at,used_for,status&order=sort.asc");
+    render();
+  }catch(e){ say($('info'),"bad","Could not load the photos: "+e.message); }
+}
+const thumb=p=>LIB_BASE+p.path.replace(/([^/]+)$/,'thumb/$1');
+const full=p=>LIB_BASE+p.path;
+const isOld=()=>team==="Old squads";
+const inTeam=()=>ROWS.filter(r=>r.team===team);
+const when=d=>new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+
+function render(){
+  document.querySelectorAll('#teams button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.team===team));
+  document.querySelectorAll('#modes button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode===mode));
+  if(mode==="sort") renderSort(); else renderGrid();
+}
+
+/* ---- keep or remove, one at a time ---- */
+function renderSort(){
+  const all=inTeam(), todo=all.filter(r=>r.status==="new");
+  const kept=all.filter(r=>r.status==="keep").length, gone=all.filter(r=>r.status==="removed").length;
+  const v=$('view'); v.innerHTML="";
+  if(!todo.length){
+    say($('info'),"ok","All "+all.length+" sorted: "+kept+" kept, "+gone+" removed.");
+    if(undoStack.length) v.appendChild(smallBtns());
+    return;
+  }
+  const p=todo[0];
+  say($('info'),"",todo.length+" left to sort. "+kept+" kept, "+gone+" removed so far.");
+  const s=document.createElement('div'); s.className="sorter";
+  s.innerHTML='<div class="pic'+(isOld()?' wide':'')+'"><img alt=""></div><div class="cap"></div>'
+    +'<div class="btns"><button class="red" id="bRemove">Remove</button><button id="bKeep">Keep</button></div>';
+  s.querySelector('img').src=full(p);
+  s.querySelector('.cap').textContent=(p.label||"")+(p.used_at?(p.label?" · ":"")+"Used "+when(p.used_at):"");
+  v.appendChild(s); s.appendChild(smallBtns(p));
+  $('bKeep').onclick=()=>decide(p,"keep");
+  $('bRemove').onclick=()=>decide(p,"removed");
+  // preload the next one so tapping through is quick
+  if(todo[1]){ const n=new Image(); n.src=full(todo[1]); }
+}
+function smallBtns(p){
+  const d=document.createElement('div'); d.className="small";
+  if(undoStack.length){ const u=document.createElement('button'); u.className="ghost"; u.textContent="Undo"; u.onclick=undo; d.appendChild(u); }
+  if(p){ const k=document.createElement('button'); k.className="ghost"; k.textContent="Skip for now";
+    k.onclick=()=>{ ROWS.splice(ROWS.indexOf(p),1); ROWS.push(p); renderSort(); }; d.appendChild(k); }
+  return d;
+}
+async function decide(p,status){
+  const before=p.status; p.status=status; undoStack.push({p,before}); renderSort();
+  try{ await rpc("set_photo_status",{p_ids:[p.id],p_status:status}); }
+  catch(e){ p.status=before; undoStack.pop(); renderSort(); say($('info'),"bad","Did not save: "+e.message); }
+}
+async function undo(){
+  const u=undoStack.pop(); if(!u) return;
+  const now=u.p.status; u.p.status=u.before;
+  ROWS.splice(ROWS.indexOf(u.p),1); ROWS.unshift(u.p);   // bring it back to the front
+  renderSort();
+  try{ await rpc("set_photo_status",{p_ids:[u.p.id],p_status:u.before}); }
+  catch(e){ u.p.status=now; renderSort(); say($('info'),"bad","Undo did not save: "+e.message); }
+}
+document.addEventListener('keydown',e=>{
+  if(mode!=="sort"||$('editor').style.display==="none"||e.target.tagName==="INPUT") return;
+  if(e.key==="k"||e.key==="ArrowRight"){ const b=$('bKeep'); if(b) b.click(); }
+  if(e.key==="r"||e.key==="ArrowLeft"){ const b=$('bRemove'); if(b) b.click(); }
+  if(e.key==="z"||e.key==="u") undo();
+});
+
+/* ---- used / removed grids ---- */
+function renderGrid(){
+  const rows = mode==="used"
+    ? inTeam().filter(r=>r.used_at && r.status!=="removed").sort((a,b)=>b.used_at.localeCompare(a.used_at))
+    : inTeam().filter(r=>r.status==="removed");
+  const v=$('view'); v.innerHTML="";
+  say($('info'),"", rows.length
+    ? (mode==="used" ? rows.length+" used photos, most recent first. They show faded in the graphic maker."
+                     : rows.length+" removed photos. They are hidden from the graphic maker but not deleted yet.")
+    : (mode==="used" ? "No used photos here yet." : "Nothing removed here."));
+  if(!rows.length) return;
+
+  const top=document.createElement('div'); top.className="row"; top.style.margin="0 0 14px";
+  const del=document.createElement('button'); del.className="red";
+  del.textContent="Delete all "+rows.length+" for good";
+  let armed=false;
+  del.onclick=async()=>{
+    if(!armed){ armed=true; del.textContent="Tap again to delete "+rows.length+" photos. This cannot be undone";
+      setTimeout(()=>{ if(armed){ armed=false; del.textContent="Delete all "+rows.length+" for good"; } },6000); return; }
+    armed=false; del.disabled=true; del.textContent="Deleting...";
+    try{ await deleteForGood(rows); render(); say($('info'),"ok","Deleted "+rows.length+" photos."); }
+    catch(e){ del.disabled=false; say($('info'),"bad","Delete failed: "+e.message); }
+  };
+  top.appendChild(del); v.appendChild(top);
+
+  const g=document.createElement('div'); g.className="grid"; v.appendChild(g);
+  rows.forEach(p=>{
+    const t=document.createElement('div'); t.className="tile"+(isOld()?" wide":"");
+    t.innerHTML='<img alt="" loading="lazy"><div class="t"></div><button></button>';
+    t.querySelector('img').src=thumb(p);
+    t.querySelector('.t').textContent = mode==="used" ? when(p.used_at)+(p.used_for?", "+p.used_for:"") : (p.label||"");
+    const b=t.querySelector('button');
+    b.textContent = mode==="used" ? "Not used" : "Put back";
+    b.onclick=async()=>{
+      b.disabled=true;
+      try{
+        if(mode==="used"){ await rpc("unmark_photo_used",{p_id:p.id}); p.used_at=null; p.used_for=null; }
+        else { await rpc("set_photo_status",{p_ids:[p.id],p_status:"keep"}); p.status="keep"; }
+        renderGrid();
+      }catch(e){ b.disabled=false; say($('info'),"bad","Did not save: "+e.message); }
+    };
+    g.appendChild(t);
+  });
+}
+async function deleteForGood(rows){
+  const paths=await rpc("delete_library_photos",{p_ids:rows.map(r=>r.id)});
+  const ids=new Set(rows.map(r=>r.id)); ROWS=ROWS.filter(r=>!ids.has(r.id));
+  // remove the files themselves, full size and thumbnail
+  const files=[]; (paths||[]).forEach(x=>{ files.push(x); files.push(x.replace(/([^/]+)$/,'thumb/$1')); });
+  for(let i=0;i<files.length;i+=200){
+    await api("/storage/v1/object/squad-photos",{method:"DELETE",body:JSON.stringify({prefixes:files.slice(i,i+200)})});
+  }
+}
+
+document.querySelectorAll('#teams button').forEach(b=>b.onclick=()=>{ team=b.dataset.team; undoStack=[]; render(); });
+document.querySelectorAll('#modes button').forEach(b=>b.onclick=()=>{ mode=b.dataset.mode; render(); });
+
+(function start(){
+  const fromLink=sessionFromUrl();
+  if(fromLink){ saveSession(fromLink); history.replaceState({},"",PAGE_URL); } else session=loadSession();
+  show();
+})();
+</script>
+</body>
+</html>

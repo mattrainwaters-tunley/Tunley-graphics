@@ -114,6 +114,15 @@
   .libGrid.wide img{object-fit:contain}
   .libGrid .cap{position:absolute;left:0;right:0;bottom:0;padding:14px 6px 5px;font-size:13px;line-height:1.2;
     color:#fff;text-align:left;background:linear-gradient(transparent,rgba(0,0,0,.75))}
+  /* used photos: faded, with a note of when and what for */
+  .libGrid button.used img{opacity:.35;filter:grayscale(1)}
+  .libGrid .usedTag{position:absolute;left:0;right:0;top:0;padding:5px 6px 14px;font-size:12px;line-height:1.2;
+    color:#fff;text-align:left;background:linear-gradient(rgba(0,0,0,.8),transparent)}
+  .libGrid .unuse{position:absolute;right:4px;bottom:4px;background:rgba(20,23,28,.85);color:#cfd6de;border:1px solid #3b434e;
+    border-radius:6px;font-size:12px;padding:3px 6px;cursor:pointer}
+  .libHide{display:flex;align-items:center;gap:6px;color:#cfd6de;font-size:15px;cursor:pointer}
+  .libHide input{width:18px;height:18px;accent-color:#4CAF72}
+  .libSort{color:#4CAF72;font-size:15px;text-decoration:none;border:1px solid #3b434e;border-radius:8px;padding:8px 12px}
 </style>
 </head>
 <body>
@@ -292,6 +301,8 @@ George Rowe"></textarea>
 <div id="lib" role="dialog" aria-modal="true" aria-label="Club photos">
   <div class="libHead">
     <h3>Club photos</h3>
+    <label class="libHide"><input type="checkbox" id="libHideUsed"> Hide used</label>
+    <a class="libSort" href="photos.html" target="_blank" rel="noopener">Sort photos</a>
     <button class="libClose" id="libClose" type="button">Close</button>
   </div>
   <div class="libTabs" id="libTabs">
@@ -1709,21 +1720,62 @@ const libEl=document.getElementById('lib'), libGrid=document.getElementById('lib
 document.querySelectorAll('#libTabs img').forEach(i=>{ i.src=badge.src; });
 async function libLoad(){
   if(LIB) return LIB;
-  const r=await fetch(SUPABASE_URL+"/rest/v1/photo_library?select=team,path,sort,label&order=sort.asc",
+  const r=await fetch(SUPABASE_URL+"/rest/v1/photo_library?select=id,team,path,sort,label,used_at,used_for,status&status=neq.removed&order=sort.asc",
     {headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+SUPABASE_KEY}});
   if(!r.ok) throw new Error("photo list "+r.status);
   LIB=await r.json(); return LIB;
 }
+let libPick=null;            // the library photo currently on the graphic, if any
+const libMarked=new Set();   // photo+graphic pairs already marked this visit, so repeat downloads count once
+const libHideUsed=document.getElementById('libHideUsed');
+try{ libHideUsed.checked = localStorage.getItem('tunley-hide-used')==="1"; }catch(e){}
+libHideUsed.onchange=()=>{ try{localStorage.setItem('tunley-hide-used',libHideUsed.checked?"1":"0");}catch(e){} libShow(libTeam); };
+async function libRpc(fn,body){
+  const r=await fetch(SUPABASE_URL+"/rest/v1/rpc/"+fn,{method:"POST",
+    headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+SUPABASE_KEY,"Content-Type":"application/json"},
+    body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(fn+" "+r.status);
+}
+const GRAPHIC_NAMES={matchday:"Matchday",half:"Half time",full:"Full time",motm:"MOTM",xi:"Squad",off:"Match off",
+  mdsquad:"Matchday + squad",upcoming:"Upcoming",month:"Month fixtures",throwback:"Throwback"};
+function markLibPhotoUsed(){
+  if(!libPick || photo!==libPick.img) return;          // own upload, or no photo
+  if(state==="month" && pitchOn()) return;              // month graphic using the pitch backdrop instead
+  const key=libPick.row.id+"|"+state;
+  if(libMarked.has(key)) return;
+  libMarked.add(key);
+  const what=GRAPHIC_NAMES[state]||state;
+  libRpc("mark_photo_used",{p_id:libPick.row.id,p_used_for:what})
+    .then(()=>{ libPick.row.used_at=new Date().toISOString(); libPick.row.used_for=what; })
+    .catch(e=>console.log(e));
+}
 function libShow(team){
   libTeam=team;
   document.querySelectorAll('#libTabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.team===team));
-  const rows=(LIB||[]).filter(p=>p.team===team);
+  const all=(LIB||[]).filter(p=>p.team===team);
+  const usedN=all.filter(p=>p.used_at).length;
+  const rows=libHideUsed.checked? all.filter(p=>!p.used_at) : all;
   libGrid.innerHTML="";
   const old = team==="Old squads";
   libGrid.classList.toggle('wide', old);
-  libNote.textContent=rows.length? rows.length+" photos. Tap one to use it. "+(old?"Oldest first.":"Newest first.") : "No photos here yet.";
+  libNote.textContent=all.length
+    ? rows.length+" photos"+(usedN?(libHideUsed.checked?" ("+usedN+" used ones hidden)":", "+usedN+" already used (faded)"):"")
+      +". Tap one to use it. "+(old?"Oldest first.":"Newest first.")
+    : "No photos here yet.";
   rows.forEach(p=>{
     const b=document.createElement('button'); b.type="button";
+    if(p.used_at){
+      b.classList.add('used');
+      const u=document.createElement('span'); u.className="usedTag";
+      u.textContent="Used "+new Date(p.used_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})+(p.used_for?", "+p.used_for:"");
+      const x=document.createElement('span'); x.className="unuse"; x.textContent="Not used"; x.title="Mark this photo as not used";
+      x.onclick=async ev=>{
+        ev.stopPropagation();
+        try{ await libRpc("unmark_photo_used",{p_id:p.id}); p.used_at=null; p.used_for=null; libShow(libTeam); }
+        catch(e){ libNote.textContent="Could not change that just now."; }
+      };
+      b.appendChild(u); b.appendChild(x);
+    }
     const t=document.createElement('img'); t.loading="lazy"; t.alt="";
     t.src=LIB_BASE+p.path.replace(/([^/]+)$/,'thumb/$1');
     b.appendChild(t);
@@ -1731,7 +1783,7 @@ function libShow(team){
     b.onclick=()=>{
       libNote.textContent="Loading photo...";
       const img=new Image(); img.crossOrigin="anonymous";
-      img.onload=()=>{ libEl.classList.remove('open'); usePhoto(img); };
+      img.onload=()=>{ libEl.classList.remove('open'); usePhoto(img); libPick={row:p,img:img}; };
       img.onerror=()=>{ libNote.textContent="That photo would not load, try another."; };
       img.src=LIB_BASE+p.path;
     };
@@ -1780,6 +1832,7 @@ document.getElementById('dl').onclick=()=>{
     : state==="month"
     ? "tunley-"+monthTeamEl.value.toLowerCase()+"-"+(monthPickEl.value||"month")+"-fixtures.png"
     : "tunley-"+f[1]+"-"+(state==="xi"?"squad":state)+".png";
+  markLibPhotoUsed();
   cv.toBlob(async blob=>{
     if(!blob) return;
     const file=new File([blob],name,{type:'image/png'});
