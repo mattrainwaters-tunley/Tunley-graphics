@@ -276,8 +276,8 @@
   </div>
 
   <div id="tbArea" style="display:none">
-    <label>Team and season</label>
-    <input type="text" id="tbLine1" placeholder="Tunley Rovers · 1913-14" maxlength="40">
+    <label>Team and season <span style="text-transform:none;letter-spacing:0">(optional, leave blank if unknown)</span></label>
+    <input type="text" id="tbLine1" placeholder="Optional, e.g. Tunley Rovers · 1913-14" maxlength="40">
     <label>Line under it <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
     <input type="text" id="tbLine2" placeholder="Portway Cup winners, outside the King William" maxlength="60">
   </div>
@@ -1119,7 +1119,7 @@ const TB_BG1="#163a26", TB_BG2="#0d2419", TB_CREAM="#f3efe2", TB_LEAF="#58c268",
 const ssLogo=new Image();
 ssLogo.onload=()=>{ if(state==="throwback"||state==="tbreel") render(); };
 ssLogo.src=SS_LOGO_SRC;
-function tbLine1(){ return (document.getElementById('tbLine1').value.trim()||"TEAM · SEASON").toUpperCase(); }
+function tbLine1(){ return document.getElementById('tbLine1').value.trim().toUpperCase(); }
 function tbLine2(){ return document.getElementById('tbLine2').value.trim(); }
 function tbBg(w,h){
   const g=ctx.createLinearGradient(0,0,0,h);
@@ -1160,19 +1160,21 @@ function renderThrowback(){
   ctx.fillStyle=TB_CREAM; ctx.fillText("THROWBACK", M, 82);
   const tw=ctx.measureText("THROWBACK ").width;
   ctx.fillStyle=TB_LEAF; ctx.fillText("THURSDAY", M+tw, 82); ls("0px");
-  const r=TB_WIN;
+  /* the photo runs down as far as the words under it allow: no words, no gap */
+  const l1=tbLine1(), l2=tbLine2();
+  const STRIP=1176;
+  const below = (l1&&l2) ? 160 : l1 ? 112 : l2 ? 72 : 14;
+  const r={x:0,y:196,w:W,h:STRIP-below-196};
   tbPhoto(r,1,0);
-  const fg=ctx.createLinearGradient(0,r.y+r.h-160,0,r.y+r.h);
+  const fh=Math.min(160,r.h*0.25);
+  const fg=ctx.createLinearGradient(0,r.y+r.h-fh,0,r.y+r.h);
   fg.addColorStop(0,"rgba(16,46,30,0)"); fg.addColorStop(1,"rgba(16,46,30,1)");
-  ctx.fillStyle=fg; ctx.fillRect(0,r.y+r.h-160,W,160);
-  // the story
-  const l1=tbLine1();
-  ctx.fillStyle=TB_CREAM; ls("1px"); tbFit(l1,"700",84,W-M*2,40);
-  ctx.fillText(l1, M, 1022); ls("0px");
-  const l2=tbLine2();
-  if(l2){ ctx.fillStyle=TB_LEAF; tbFit(l2,"600",40,W-M*2,22); ctx.fillText(l2, M, 1108); }
+  ctx.fillStyle=fg; ctx.fillRect(0,r.y+r.h-fh,W,fh);
+  let ty=r.y+r.h+6;
+  if(l1){ ctx.fillStyle=TB_CREAM; ls("1px"); tbFit(l1,"700",84,W-M*2,40); ctx.fillText(l1, M, ty); ls("0px"); ty+=86; }
+  if(l2){ ctx.fillStyle=TB_LEAF; tbFit(l2,"600",40,W-M*2,22); ctx.fillText(l2, M, ty); }
   // slim sponsor credit
-  ctx.fillStyle="rgba(255,255,255,.16)"; ctx.fillRect(M,1176,W-M*2,2);
+  ctx.fillStyle="rgba(255,255,255,.16)"; ctx.fillRect(M,STRIP,W-M*2,2);
   let lx=M;
   if(ssLogo.complete && ssLogo.naturalWidth){
     const lh=112, lw=ssLogo.naturalWidth*lh/ssLogo.naturalHeight;
@@ -1198,24 +1200,34 @@ function reelCenter(text,y,font,color,spacing){
 function reelScene(t){
   tbBg(RW,RH);
   ctx.textBaseline="top";
-  reelCenter("TUNLEY ATHLETIC FC",186,"600 32px 'Barlow Condensed',sans-serif","rgba(243,239,226,.85)","9px");
-  ls("1px"); const ts=tbFit("THROWBACK","700",150,RW-140,60); ls("0px");
-  reelCenter("THROWBACK",232,"700 "+ts+"px 'Barlow Condensed',sans-serif",TB_CREAM,"1px");
-  reelCenter("THURSDAY",372,"700 "+ts+"px 'Barlow Condensed',sans-serif",TB_LEAF,"1px");
-  const r={x:70,y:560,w:940,h:752}, b=18;
-  ctx.fillStyle=TB_CREAM; ctx.fillRect(r.x-b,r.y-b,r.w+b*2,r.h+b*2);
+  reelCenter("TUNLEY ATHLETIC FC",150,"600 30px 'Barlow Condensed',sans-serif","rgba(243,239,226,.85)","9px");
+  ls("1px"); const ts=tbFit("THROWBACK","700",128,RW-140,60); ls("0px");
+  reelCenter("THROWBACK",192,"700 "+ts+"px 'Barlow Condensed',sans-serif",TB_CREAM,"1px");
+  reelCenter("THURSDAY",312,"700 "+ts+"px 'Barlow Condensed',sans-serif",TB_LEAF,"1px");
+  /* the photo is as big as the space allows, at its own shape so nobody is cut off,
+     and the photo plus its words sit centred between the title and the yellow bar */
+  const by=1510, top=452, bottom=by-20;
+  const l1=tbLine1(), l2=tbLine2();
+  const textH=(l1?96:0)+(l2?54:0), gap=textH?24:0;
+  const ar = photo ? photo.width/photo.height : 1.25;
+  const maxH = bottom-top-textH-gap;
+  // full width; it may trim a little off the sides (up to about a tenth) to fill the height
+  const ph=Math.min(maxH, (RW/ar)*1.12);
+  const block=ph+gap+textH;
+  const y0=top+Math.max(0,(bottom-top-block)/2);
+  const r={x:0, y:y0, w:RW, h:ph}, b=0;
   const k=easeIO(t/10.5);
-  tbPhoto(r,1+0.75*k,0.12*k);
+  tbPhoto(r,1+0.6*k,0.1*k);
   const fadeIn=(t0,y,text,font,color)=>{
     const a=easeIO((t-t0)/0.6); if(a<=0||!text) return;
     ctx.globalAlpha=a; ctx.font=font; ctx.fillStyle=color; ctx.textAlign="center";
     ctx.fillText(text,RW/2,y+(1-a)*18); ctx.globalAlpha=1;
   };
-  const l1=tbLine1(); ls("1px"); const s1=tbFit(l1,"700",86,RW-140,40); ls("0px");
-  fadeIn(1.2,1336,l1,"700 "+s1+"px 'Barlow Condensed',sans-serif",TB_CREAM);
-  const l2=tbLine2(); const s2=l2?tbFit(l2,"600",42,RW-140,22):42;
-  fadeIn(3.6,1432,l2,"600 "+s2+"px 'Barlow Condensed',sans-serif",TB_LEAF);
-  const by=1510;
+  let ty=r.y+r.h+b+gap;
+  if(l1){ ls("1px"); const s1=tbFit(l1,"700",86,RW-140,40); ls("0px");
+    fadeIn(1.2,ty,l1,"700 "+s1+"px 'Barlow Condensed',sans-serif",TB_CREAM); ty+=96; }
+  if(l2){ const s2=tbFit(l2,"600",42,RW-140,22);
+    fadeIn(l1?3.6:1.2,ty,l2,"600 "+s2+"px 'Barlow Condensed',sans-serif",TB_LEAF); }
   ctx.fillStyle=SS_YEL; ctx.fillRect(0,by,RW,190);
   let lx=56;
   if(ssLogo.complete && ssLogo.naturalWidth){
