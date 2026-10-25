@@ -1132,7 +1132,7 @@ function tbFit(text,weight,start,maxW,min){
   return s;
 }
 /* photo cover-fitted into a window, with the sliders, plus an extra zoom for the reel */
-function tbPhoto(r,extra,shiftY){
+function tbPhoto(r,extra,shiftY,baseZoom){
   ctx.save();
   ctx.beginPath(); ctx.rect(r.x,r.y,r.w,r.h); ctx.clip();
   if(!photo){
@@ -1141,7 +1141,7 @@ function tbPhoto(r,extra,shiftY){
     ctx.font="600 44px 'Barlow Condensed',sans-serif"; ls("6px");
     ctx.fillText("ADD AN ARCHIVE PHOTO", r.x+r.w/2, r.y+r.h/2); ls("0px");
   }else{
-    const z=zoom*(extra||1);
+    const z=(baseZoom===undefined?zoom:baseZoom)*(extra||1);
     const s=Math.max(r.w/photo.width,r.h/photo.height)*z;
     const w=photo.width*s, h=photo.height*s;
     const ny=Math.max(0,Math.min(1,nudge+(shiftY||0)));
@@ -1164,8 +1164,15 @@ function renderThrowback(){
   const l1=tbLine1(), l2=tbLine2();
   const STRIP=1176;
   const below = (l1&&l2) ? 160 : l1 ? 112 : l2 ? 72 : 14;
-  const r={x:0,y:196,w:W,h:STRIP-below-196};
-  tbPhoto(r,1,0);
+  const avail=STRIP-below-196;
+  const ar=photo ? photo.width/photo.height : W/avail;
+  /* at zoom 1 the whole photo shows, full width, so nobody is cut off.
+     the zoom slider first makes the photo taller (trimming the sides) until it fills the space, then zooms in */
+  const nat=W/ar;
+  const ph=Math.min(avail, nat*zoom);
+  const inner=Math.max(1, zoom*nat/ph);
+  const r={x:0,y:196+Math.round((avail-ph)/2),w:W,h:ph};
+  tbPhoto(r,1,0,inner);
   const fh=Math.min(160,r.h*0.25);
   const fg=ctx.createLinearGradient(0,r.y+r.h-fh,0,r.y+r.h);
   fg.addColorStop(0,"rgba(16,46,30,0)"); fg.addColorStop(1,"rgba(16,46,30,1)");
@@ -1211,13 +1218,14 @@ function reelScene(t){
   const textH=(l1?96:0)+(l2?54:0), gap=textH?24:0;
   const ar = photo ? photo.width/photo.height : 1.25;
   const maxH = bottom-top-textH-gap;
-  // full width; it may trim a little off the sides (up to about a tenth) to fill the height
-  const ph=Math.min(maxH, (RW/ar)*1.12);
+  const nat=RW/ar;
+  const ph=Math.min(maxH, nat*zoom);        // zoom 1: whole photo, full width. more zoom: taller, sides trimmed
+  const inner=Math.max(1, zoom*nat/ph);
   const block=ph+gap+textH;
   const y0=top+Math.max(0,(bottom-top-block)/2);
   const r={x:0, y:y0, w:RW, h:ph}, b=0;
-  const k=easeIO(t/10.5);
-  tbPhoto(r,1+0.6*k,0.1*k);
+  const k=reelStill ? 0 : easeIO(t/10.5);
+  tbPhoto(r,1+0.35*k,0.06*k,inner);
   const fadeIn=(t0,y,text,font,color)=>{
     const a=easeIO((t-t0)/0.6); if(a<=0||!text) return;
     ctx.globalAlpha=a; ctx.font=font; ctx.fillStyle=color; ctx.textAlign="center";
@@ -1266,7 +1274,8 @@ function drawReelFrame(t){
   ctx.restore();
 }
 let reelBusy=false;
-function renderReelPreview(){ if(!reelBusy) drawReelFrame(5); }
+let reelStill=false;
+function renderReelPreview(){ if(reelBusy) return; reelStill=true; try{ drawReelFrame(5); } finally{ reelStill=false; } }
 function reelType(){
   const types=['video/mp4;codecs=avc1.42E01E','video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'];
   if(!window.MediaRecorder) return null;
