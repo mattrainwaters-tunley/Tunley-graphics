@@ -432,6 +432,20 @@ function currentRow(){
 const sel2=document.getElementById('fixture2');
 const fxLabel=f=>niceDate(f[1])+" — "+f[0]+" v "+f[3]+" ("+f[4]+")";
 
+/* the other game on the same day as fixture number i, or -1 if there is none */
+function sameDayIndex(i){
+  i=Number(i);
+  const a=FIXTURES[i];
+  if(!a) return -1;
+  return FIXTURES.findIndex((f,j)=>j!==i && f[1]===a[1]);
+}
+/* point the second game at the same-day match, if there is one */
+function autoSecond(){
+  sel2.dataset.touched="";
+  const j=sameDayIndex(sel.value);
+  if(j>=0 && String(j)!==sel2.value){ sel2.value=j; try{ ovClear(1); }catch(e){} }
+}
+
 function fillDropdown(keep){
   const keep2 = (sel2.value!=="" && FIXTURES[sel2.value]) ? FIXTURES[sel2.value] : null;
   sel.innerHTML=""; sel2.innerHTML="";
@@ -452,14 +466,12 @@ function fillDropdown(keep){
   }
   sel.value=pick;
 
-  // second game: keep it if still there, else the next game on the same day
+  // second game: keep it only if someone picked it by hand,
+  // otherwise the other game on the same day as the first one
   let pick2=-1;
-  if(keep2) pick2=FIXTURES.findIndex(f=>f[1]===keep2[1] && f[3]===keep2[3] && f[0]===keep2[0]);
-  if(pick2<0){
-    const day=FIXTURES[pick] ? FIXTURES[pick][1] : null;
-    pick2=FIXTURES.findIndex((f,i)=>i!==pick && day && f[1]===day);
-    if(pick2<0) pick2=Math.min(pick+1,FIXTURES.length-1);
-  }
+  if(keep2 && sel2.dataset.touched==="1") pick2=FIXTURES.findIndex(f=>f[1]===keep2[1] && f[3]===keep2[3] && f[0]===keep2[0]);
+  if(pick2<0) pick2=sameDayIndex(pick);
+  if(pick2<0) pick2=Math.min(pick+1,FIXTURES.length-1);
   sel2.value=pick2;
 
   try{ fillUpcoming(); }catch(e){}
@@ -1930,8 +1942,11 @@ function syncTwoUp(){
   document.getElementById('fixture2Wrap').style.display = on?"block":"none";
   document.getElementById('score2Wrap').style.display = (on&&state==="full")?"block":"none";
 }
-document.getElementById('twoUp').onchange=()=>{ syncTwoUp(); syncOvTargets(); render(); };
-sel2.onchange=()=>{ ovClear(1); syncOvTargets(); render(); };
+document.getElementById('twoUp').onchange=()=>{
+  if(document.getElementById('twoUp').checked && sel2.dataset.touched!=="1") autoSecond();
+  syncTwoUp(); syncOvTargets(); render();
+};
+sel2.onchange=()=>{ sel2.dataset.touched="1"; ovClear(1); syncOvTargets(); render(); };
 UP_IDS.forEach((id,i)=>{
   const s=document.getElementById(id);
   if(s) s.onchange=()=>{ s.dataset.touched="1"; ovClear(i); syncOvTargets(); render(); };
@@ -1964,7 +1979,9 @@ try{ syncOvTargets(); }catch(e){}
 sel.onchange=()=>{
   const t=teamOf();
   if(t!==lastTeam){ lastTeam=t; loadSquad(); }
-  ovClear(0); syncOvTargets();
+  ovClear(0);
+  autoSecond();
+  syncOvTargets();
   render();
 };
 squadBox.oninput=()=>{ saveSquad(); render(); };
